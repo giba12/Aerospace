@@ -1,0 +1,6 @@
+# Pinned (NFR-009). Direct dependency: pytest. The rest are its transitive pins.
+# Add pandas/matplotlib here (pinned) in the milestone that first imports them (M4).
+iniconfig==2.3.1
+packaging==26.3
+pluggy==1.6.0
+pytest==8.3.4
