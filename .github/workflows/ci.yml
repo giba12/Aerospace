@@ -1,0 +1,56 @@
+name: ci
+
+# TST-009: every push and pull request. The commands below are the README's commands (SYS-001);
+# if the two ever differ, SYS-001 is failing.
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-test:
+    # Pinned: ubuntu-latest moves to a newer image and would silently change the toolchain.
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - compiler: gcc-13
+            cxx: g++-13
+          - compiler: clang-18
+            cxx: clang++-18
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build python3-venv g++-13 clang-18
+
+      - name: Python environment (pinned)
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -r python/requirements.txt
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} -DSIM_WARNINGS_AS_ERRORS=ON
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        run: cd build && ctest --output-on-failure
+
+      # The gate checks unknown IDs and orphan tests now. `--require-coverage` is added in
+      # milestone M5 (baseline 6.7), when every Must requirement is expected to have a test.
+      - name: Traceability
+        run: >
+          .venv/bin/python tools/trace.py --requirements docs/requirements.csv
+          --junit build/test-reports/gtest.xml build/test-reports/pytest.xml
+          --matrix-out build/test-reports/traceability.md
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: reports-${{ matrix.compiler }}
+          path: build/test-reports/
