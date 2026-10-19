@@ -95,9 +95,9 @@ code as the program proves nothing. The tests compare against (a) the textbook f
 | **SIM-001** | Must | The program has a "true state" holding time, position and speed, with units in the names | `TrueState` has `t_s`, `position_m`, `velocity_mps`. M1 added a test that checks the field names and that they are numbers | `Interfaces.TrueStateHoldsTimePositionAndVelocity` |
 | **SIM-002** | Must | Time moves in equal steps and each step's time is `k × dt`, never added up | Unchanged in M1; re-checked: after 1000 steps the time is 100.0 s, also in the accelerating case | `Dynamics.ConstantVelocityMatchesAnalyticSolution`, `Dynamics.EulerWithAccelerationMatchesVvSim01` |
 | **SIM-003** | Must | With no acceleration, the result matches the textbook formula `x0 + v0·t` | Still true; also proved that with zero acceleration the speed stays **exactly** the same, not just close | `Dynamics.ConstantVelocityMatchesAnalyticSolution`, `Dynamics.ZeroAccelerationLeavesVelocityUnchanged` |
-| **SIM-004** | Should | You can supply a steady acceleration, and the error versus the textbook formula is stated and checked | `--accel` / `accel_mps2`. The error bound `½·\|a\|·t·dt` is documented in `dynamics.hpp`, the README and `architecture.md`, and tested | 4 dynamics tests, plus 2 through the real program |
+| **SIM-004** | Should | You can supply a steady acceleration, and the error versus the textbook formula is stated and checked | `--accel` / `accel_mps2`. The error bound `½·\|a\|·t·dt` is documented in `dynamics.hpp`, the README and `architecture.md`, and tested | 3 dynamics tests (VV-SIM-01, a sweep checked at every step, zero-acceleration), plus 2 through the real program |
 | **SIM-005** | Must | N steps produce N+1 rows (step 0 is included) | Unchanged; re-run with acceleration enabled | `Runner.NSTepsProduceNPlusOneRows`, `test_default_run_writes_header_and_n_plus_one_rows` |
-| **SIM-006** | Must | Nonsense settings are refused, and the message names the setting | Added: non-finite acceleration is refused (`accel_mps2: must be finite`). Existing checks for `dt`, `steps`, `x0`, `v0` still pass | `Dynamics.RejectsNonFiniteAcceleration` and 3 others; `test_bad_input_exits_2_...[--accel nan]` |
+| **SIM-006** | Must | Nonsense settings are refused, and the message names the setting | Added: non-finite acceleration is refused (`accel_mps2: must be finite`). Existing checks for `dt`, `steps`, `x0`, `v0` still pass | `Dynamics.ValidateRejectsEachBadSetting` (now also covers `x0`, `v0`, `dt`, `steps`), `Dynamics.ValidateAcceptsBoundaryAndNegativeSettings`; `test_bad_input_exits_2_...[--accel nan]` |
 | **CFG-001** | Must | Every setting is a documented flag with a default | `--accel` is in `--help` with its unit (m/s^2) and default (0) | `test_help_lists_every_flag_...`, `test_accel_equals_form_...` |
 | **NFR-003** | Must | No hidden randomness or clock readings in the core | M1 adds none; the repo's automatic scan still passes | `test_simcore_uses_no_hidden_randomness_or_clock` |
 
@@ -139,7 +139,7 @@ broke the code two ways and confirmed the tests failed each time (then restored 
 |---|---|---|
 | SIM-002: at k = 1000, dt = 0.1, time = 100.0 within 1e-9 s | 100.0 | Pass |
 | SIM-003: zero acceleration matches `x0 + v0·t` within 1e-9 m after 1000 steps | Within tolerance | Pass |
-| SIM-004 (amended): `\|exact − Euler\| ≤ ½·\|a\|·t·dt + 1e-9` m | Reference case: error = bound within **1.5e-11 m**. Holds at all 400 steps of a negative-speed, negative-acceleration run. Holds across 24 combinations of acceleration (−9.81 to 25), step size (0.01, 0.1) and start speed (10, −300) at 1000 steps | Pass **within the stated envelope**; see section 6 |
+| SIM-004 (amended): `\|exact − Euler\| ≤ ½·\|a\|·t·dt + 1e-9` m | Reference case: error = bound within **1.5e-11 m**. At M1 the bound was verified up to 1000 steps with `dt ≤ 0.1`; the follow-up in section 6 extends this to all 120 sweep combinations up to the 100,000-step cap, under the CR-24 tolerance | Pass **within that envelope**; wider range covered by approved CR-24 |
 | SIM-005: N + 1 rows | 1001 rows for 1000 steps | Pass |
 | SIM-006: non-finite acceleration refused, parameter named | `sim: error: accel_mps2: must be finite`, exit 2, no file created | Pass |
 | VV-SIM-01: 5995.0 m, 110.0 m/s, gap 5.0 m | Match to within 1e-9 | Pass |
@@ -174,38 +174,29 @@ Honest limits, so nothing is overclaimed:
   requirements are untested by design.
 - 38 of 61 Must requirements still have no passing test; the gate that enforces coverage is switched on in M5.
 - Validation scenarios VAL-01 to VAL-08 are not run at M1. Only the truth-side inputs to them were checked.
-- No sanitizer run (planned for M5), and no code-coverage figure.
+- No sanitizer *job in CI* (planned for M5) and no code-coverage figure. A one-off ASan + UBSan run of the whole suite passed during the CR-24 follow-up.
 - The result applies to the platform tested (x86-64 Linux, GCC 13.3 and Clang 18.1.3). Identical output on other
   platforms is not claimed.
 
 ---
 
-## 6. Finding: the "+1e-9 m" margin in SIM-004 is too tight for long runs
+## 6. Finding: the "+1e-9 m" margin in SIM-004 is too tight for long runs (follow-up: CR-24)
 
 **What I found.** The amended SIM-004 says the error must not exceed `½·|a|·t·dt + 1e-9` metres. The first term is
-exactly right. The `+1e-9` is a fixed allowance for computer rounding, and rounding error grows as the numbers get
-bigger. I reproduced the program's arithmetic across many settings:
+exactly right. The `+1e-9` is a fixed allowance for computer rounding, and rounding error grows with the number of
+steps and the size of the numbers. Measured against exact (rational) arithmetic over 120 combinations, the fixed
+1e-9 m fails 52 of them (for example 5e-6 m at a = 1, dt = 0.1, 100,000 steps). SIM-003 is **not** violated: it is
+already scoped to "after 1000 steps".
 
-| Case | Rounding error beyond the bound | Within the 1e-9 allowance? |
-|---|---|---|
-| Reference: a = 1, dt = 0.1, 1000 steps | 1.5e-11 m | Yes |
-| Any tested case up to 1000 steps with dt ≤ 0.1 | below 1e-9 | Yes |
-| a = −9.81, dt = 1, 1000 steps | 4.3e-9 m | **No** |
-| a = 1, dt = 0.1, 100,000 steps (the new cap) | 4.7e-6 m | **No** |
-| a = −9.81, dt = 1, 100,000 steps | 2.7e-3 m | **No** |
-| Even zero acceleration, dt = 0.001, 100,000 steps, v0 = −300 | 5e-8 m | **No** |
+**What it means.** Not a bug. The error bound is correct and the rounding is micro- to milli-metres on kilometre
+scales. But SIM-004 cannot be satisfied across the 100,000-step range the program accepts, and no double-precision
+program could meet 1e-9 m beyond about 8.4 million metres.
 
-**What it means.** This is not a bug. The error bound itself is correct, and the rounding is only
-micro-to-milli-metres on kilometre-scale distances. But the requirement as worded cannot be guaranteed for the
-longest runs the program now allows, and SIM-003's identical `1e-9` has the same limitation.
-
-**What I did.** I added a test, `EulerErrorWithinRequirementBoundAcrossReferenceEnvelope`, that proves the
-requirement exactly as written over the envelope where it does hold (up to 1000 steps, dt ≤ 0.1), with a comment
-saying where it stops being true.
-
-**What I recommend (your decision, I did not edit the controlled baseline).** Replace the fixed allowance with one
-that scales with size, for example `1e-9 m + 1e-12 × |position|`, in both SIM-003 and SIM-004, at the next baseline
-revision. Alternatively, state in the requirement that it applies to runs of at most 1000 steps.
+**Correction to my first recommendation.** I first suggested `1e-9 + 1e-12·|position|`; that fails 5 of the 60
+cases in my first study, so it is withdrawn. The chosen proposal is `max(1e-9 m, 2·k·2⁻⁵³·X)`, which covers all 120
+with about 4.8× headroom. Full evidence, exact replacement wording and risks are in
+[`docs/change-requests/CR-24-position-rounding-allowance.md`](change-requests/CR-24-position-rounding-allowance.md),
+which was **approved and applied on 2026-10-19** (baseline v0.2). The requirements text now matches the tests.
 
 ---
 
