@@ -64,6 +64,33 @@ TEST(Dynamics, EulerErrorBoundHoldsAtEveryStep) {
     }
 }
 
+// The amended SIM-004 as written: |exact - Euler| <= 0.5*|a|*t*dt + 1e-9 m. The absolute 1e-9
+// margin holds across the reference envelope (up to 1000 steps, dt <= 0.1, any realistic a and
+// v0). It does NOT hold for much longer or coarser runs, where rounding error grows with the
+// size of the numbers (measured: about 5e-6 m at a = 1, dt = 0.1, 100000 steps). See M1 report.
+TEST(Dynamics, EulerErrorWithinRequirementBoundAcrossReferenceEnvelope) {
+    RecordProperty("requirements", "SIM-004");
+    for (const double a : {-9.81, -1.0, 0.0, 0.1, 1.0, 25.0}) {
+        for (const double dt : {0.01, 0.1}) {
+            for (const double v0 : {10.0, -300.0}) {
+                DynamicsConfig cfg;
+                cfg.accel_mps2 = a;
+                cfg.dt_s = dt;
+                cfg.v0_mps = v0;
+                cfg.steps = 1000;
+                TrueState s = initial_state(cfg);
+                for (std::int64_t k = 1; k <= cfg.steps; ++k) {
+                    s = propagate(s, cfg, k);
+                    const double t = static_cast<double>(k) * dt;
+                    ASSERT_LE(std::abs(sim::testing::analytic_position_m(cfg, k) - s.position_m),
+                              0.5 * std::abs(a) * t * dt + 1e-9)
+                        << "a=" << a << " dt=" << dt << " v0=" << v0 << " k=" << k;
+                }
+            }
+        }
+    }
+}
+
 TEST(Dynamics, ZeroAccelerationLeavesVelocityUnchanged) {
     RecordProperty("requirements", "SIM-003,SIM-004");
     DynamicsConfig cfg;  // accel_mps2 defaults to 0
