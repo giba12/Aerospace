@@ -26,6 +26,8 @@ def test_default_run_writes_header_and_n_plus_one_rows(run_sim, tmp_path):
     (["--bogus", "1"], "--bogus"),
     (["--steps"], "--steps"),
     (["--steps", "ten"], "--steps"),
+    (["--steps", "100001"], "steps"),
+    (["--steps", "-1"], "steps"),
     (["--dt", "0"], "dt_s"),
     (["--meas-every", "0"], "every_n_steps"),
 ])

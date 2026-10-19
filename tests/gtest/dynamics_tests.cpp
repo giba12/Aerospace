@@ -21,6 +21,17 @@ TEST(Dynamics, ConstantVelocityMatchesAnalyticSolution) {
     EXPECT_NEAR(s.t_s, 100.0, sim::testing::kTimeTol_s);  // k * dt, not accumulated
 }
 
+TEST(Dynamics, StepsAreBoundedAboveAndBelow) {
+    RecordProperty("requirements", "SIM-006");
+    DynamicsConfig cfg;
+    cfg.steps = kMaxSteps;
+    EXPECT_NO_THROW(cfg.validate());
+    cfg.steps = kMaxSteps + 1;
+    EXPECT_THROW(cfg.validate(), std::invalid_argument);
+    cfg.steps = -1;
+    EXPECT_THROW(cfg.validate(), std::invalid_argument);
+}
+
 TEST(Dynamics, RejectsNonFiniteOrNonPositiveDt) {
     RecordProperty("requirements", "SIM-006");
     DynamicsConfig cfg;

@@ -2,7 +2,7 @@
 
 `@pytest.mark.req("SEN-004", ...)` is how a pytest test names the requirements it verifies
 (TST-005). This hook copies the marker into the JUnit XML as a `requirements` property, which
-is where tools/trace.py reads it.
+is where tools/req_trace.py reads it.
 """
 import os
 import pathlib
