@@ -5,8 +5,8 @@
 | | |
 |---|---|
 | **Document ID** | SEB-001 |
-| **Version / status** | 0.1 DRAFT. **Tentative proposal; not baselined.** |
-| **Date** | 2026-10-10 |
+| **Version / status** | 0.2 DRAFT (CR-24 applied). **Tentative proposal; not baselined.** |
+| **Date** | 2026-10-10 (v0.1); 2026-10-19 (v0.2) |
 | **System** | Sensor and State-Estimation Simulator (working name `sensor-sim`) |
 | **Prepared for** | Project owner (learner), 30-day sprint |
 | **Prepared by** | Claude (proposal, for owner review) |
@@ -30,6 +30,7 @@ Everything marked **[TBD]** is a value to be confirmed once the C++ implementati
 | Version | Date | Change |
 |---|---|---|
 | 0.1 | 2026-10-10 | First proposal, derived from the three source documents and a throwaway prototype of the reference scenario (Appendix A). |
+| 0.2 | 2026-10-19 | CR-24 applied: position tolerance now scales with run length and position size (§6.3, SIM-003, SIM-004, §6.5). |
 
 ---
 
@@ -132,7 +133,7 @@ REQ v0.1 starts at component level. This baseline adds a **system level** above 
 
 | ID | Pri | Change | Verification | CR |
 |---|---|---|---|---|
-| **SIM-004** | S | Add: with Euler integration the position error vs `x0 + v0·t + ½·a·t²` shall not exceed `½·abs(a)·t·dt + 1e-9` m. (Measured 5.000000 m for a = 1 m/s², t = 100 s, dt = 0.1 s.) | T (U) | CR-16 |
+| **SIM-004** | S | Add: with Euler integration the position error vs `x0 + v0·t + ½·a·t²` shall not exceed `½·abs(a)·t·dt + tol_pos(k)`, where `tol_pos` is the position tolerance of §6.3 (CR-24). (Measured 5.000000 m for a = 1 m/s², t = 100 s, dt = 0.1 s.) | T (U) | CR-16 |
 | **RUN-001** | M | Replace the sequence with: propagate → observe (the **sensor** decides whether a measurement is due) → if the estimator is uninitialized, initialize on the first measurement, else predict and, if measured, update → record. | T (I) | CR-01, CR-03 |
 | **EST-007** | M | Make concrete: with σ = 0 and `R = 1e-6 m²`, position error < 1e-3 m **and** velocity error < 1e-3 m/s after 10 measurements. (Prototype: 1.8e-11 m and 7.4e-8 m/s.) | T (U) | CR-04 |
 | **EST-008** | M | Make concrete: on every held-out seed, estimated-position RMSE at measurement timestamps shall be ≤ **0.75 ×** raw-measurement RMSE. (Prototype: 0.32–0.54 over 200 seeds.) | T (S) | CR-06 |
@@ -266,7 +267,7 @@ A V-model in miniature: each requirement level has a matching test level (§6.2)
 
 | Quantity | Tolerance | Basis |
 |---|---|---|
-| Position (analytic comparison) | 1e-9 m | SIM-003; accumulated rounding over 1000 steps is about 1e-11 |
+| Position (analytic comparison after k steps) | `max(1e-9 m, 2·k·u·X)`, u = 2⁻⁵³, X = \|x0\| + \|v0\|·t + ½·\|a\|·t² (t = k·dt) | SIM-003, SIM-004 (CR-24). Rounding grows with k and with position size; a fixed 1e-9 m is unachievable beyond about 8.4e6 m. The second term exceeds the 1e-9 m floor only when k·X > about 4.5e6, so the SIM-003 reference check keeps 1e-9 m. |
 | Time | 1e-9 s | SIM-002 |
 | Covariance symmetry | 1e-9 | EST-006 |
 | C++ vs Python oracle | 1e-9 absolute | Different operation order gives about 1e-12 differences |
@@ -299,8 +300,8 @@ Requirement tagging in GoogleTest: `RecordProperty("requirements", "SIM-003")`. 
 | SYS-006 | M | I | – | README checklist (DOC-001) |
 | SIM-001 | M | I | – | Header review: fields and units |
 | SIM-002 | M | T | U | k = 1000, dt = 0.1 gives 100.0 ± 1e-9 |
-| SIM-003 | M | T, A | U | Constant velocity vs analytic, ± 1e-9 m after 1000 steps |
-| SIM-004 | S | T | U | Euler error ≤ ½·\|a\|·t·dt + 1e-9 (a = 1 gives 5 m) |
+| SIM-003 | M | T, A | U | Constant velocity vs analytic, within the §6.3 position tolerance |
+| SIM-004 | S | T | U | Euler error ≤ ½·\|a\|·t·dt + §6.3 position tolerance (a = 1 gives 5 m) |
 | SIM-005 | M | T | U, S | N + 1 rows |
 | SIM-006 | M | T | U | Invalid or non-finite config rejected |
 | SEN-001 | M | I | – | `Measurement` has no velocity field |
@@ -688,6 +689,7 @@ Severity: **High** the project could produce a wrong or unverifiable result; **M
 | CR-21 | Low | G | No document control or baselining | Header, NFR-010 |
 | CR-22 | Medium | G | No stakeholder-need or system-requirement layer | §2, §3.2 |
 | CR-23 | Medium | G | Command-line contract incomplete | §8.3, §8.6, CFG-002 |
+| CR-24 | Medium | G, A | Fixed 1e-9 m position tolerance cannot be met for long or large runs | §6.3, SIM-003, SIM-004 |
 
 Each change request below states: **what it is** (the finding), **what I recommend**, **why**, **what it does**, and **likely outcome** for the system.
 
@@ -876,6 +878,14 @@ Each change request below states: **what it is** (the finding), **what I recomme
 - **Why:** pytest system tests (TST-008) and users need a stable interface to code against.
 - **What it does:** Fixes names, units, defaults and failure behavior.
 - **Likely outcome:** Black-box tests that survive refactoring and a `--help` that is itself tested.
+
+### CR-24: Fixed 1e-9 m position tolerance cannot be met for long or large runs
+*Medium · Gap and Ambiguity · SIM-003, SIM-004, §6.3 · Raised and approved 2026-10-19 (full record: `docs/change-requests/CR-24-position-rounding-allowance.md`)*
+- **What it is:** Floating-point rounding grows with the number of steps and the size of the position, so a fixed 1e-9 m cannot hold across the run lengths the program accepts (it failed 52 of 120 measured cases, and no double can meet it beyond about 8.4e6 m). SIM-003 was already limited to 1000 steps; SIM-004 was not.
+- **Recommend:** One shared tolerance in §6.3, `max(1e-9 m, 2·k·u·X)`, referenced by SIM-003 and SIM-004.
+- **Why:** A requirement that cannot be met forces a silent deviation or a test that disagrees with the requirement it cites.
+- **What it does:** Keeps 1e-9 m for small runs and scales for large ones, stated once for reuse.
+- **Likely outcome:** SIM-003 and SIM-004 verifiable across the whole input range (0 of 120 cases fail); no production code change.
 
 ---
 
