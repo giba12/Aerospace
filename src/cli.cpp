@@ -74,6 +74,10 @@ const std::vector<FlagSpec>& flags() {
          [](RunConfig& c, const std::string& f, const std::string& v) {
              c.sensor.every_n_steps = parse_int(f, v);
          }},
+        {"--accel", "m/s^2", "0", "constant acceleration (finite)",
+         [](RunConfig& c, const std::string& f, const std::string& v) {
+             c.dynamics.accel_mps2 = parse_double(f, v);
+         }},
         {"--sensor-id", "-", "pos0", "sensor name (non-empty, no commas)",
          [](RunConfig& c, const std::string&, const std::string& v) { c.sensor.sensor_id = v; }},
         {"--out", "path", "run.csv", "output CSV path",
