@@ -22,6 +22,9 @@ void DynamicsConfig::validate() const {
     if (!std::isfinite(v0_mps)) {
         throw std::invalid_argument("v0_mps: must be finite");
     }
+    if (!std::isfinite(accel_mps2)) {
+        throw std::invalid_argument("accel_mps2: must be finite");
+    }
 }
 
 TrueState initial_state(const DynamicsConfig& cfg) {
@@ -29,10 +32,11 @@ TrueState initial_state(const DynamicsConfig& cfg) {
 }
 
 TrueState propagate(const TrueState& prev, const DynamicsConfig& cfg, std::int64_t k) {
-    // Explicit Euler. With no acceleration the velocity never changes, so this is exact.
+    // Explicit Euler: position advances with the OLD velocity, then velocity is updated.
+    // With accel_mps2 == 0 the velocity never changes, so this is exact (SIM-003).
     return TrueState{static_cast<double>(k) * cfg.dt_s,
                      prev.position_m + prev.velocity_mps * cfg.dt_s,
-                     prev.velocity_mps};
+                     prev.velocity_mps + cfg.accel_mps2 * cfg.dt_s};
 }
 
 }  // namespace sim

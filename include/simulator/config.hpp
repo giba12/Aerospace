@@ -11,13 +11,13 @@ namespace sim {
 // for hours and filling the disk. Raise it here if a larger study is ever needed (SIM-006).
 inline constexpr std::int64_t kMaxSteps = 100000;
 
-// Settings for the truth model. M0 carries only what the skeleton uses.
-// M1 adds accel_mps2 (SIM-004).
+// Settings for the truth model.
 struct DynamicsConfig {
     double dt_s{0.1};
     std::int64_t steps{1000};
     double x0_m{0.0};
     double v0_mps{10.0};
+    double accel_mps2{0.0};  // constant acceleration; 0 means constant velocity (SIM-004)
 
     // Throws std::invalid_argument naming the offending parameter (SIM-006, DD-007).
     void validate() const;

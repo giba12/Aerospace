@@ -4,7 +4,8 @@
 > qualified for any use. It does not model a real sensor, real vehicle dynamics, or
 > operational sensor fusion. (SYS-006)
 
-**Status: M0 skeleton.** Every stage of the pipeline exists and runs, but the stages are
+**Status: M1 (truth model complete).** Every stage of the pipeline exists and runs. The truth
+model is real (constant velocity or constant acceleration); the sensor and estimator are still
 deliberately trivial stand-ins. See [Limitations](#limitations).
 
 ## What this project demonstrates
@@ -33,7 +34,9 @@ is in [docs/architecture.md](docs/architecture.md) and the
 
 SI units throughout, with the unit in every field and flag name (`_m`, `_s`, `_mps`).
 Time is `t = k × dt`, computed per step, never accumulated. The model is one-dimensional,
-constant velocity.
+constant velocity by default, or constant acceleration with `--accel`. Truth is advanced with
+explicit Euler, which is exact when the acceleration is 0 and otherwise off by exactly
+`a·t·dt/2` (5 m for a = 1 m/s², t = 100 s, dt = 0.1 s; baseline VV-SIM-01).
 
 ## Prerequisites
 
@@ -67,7 +70,7 @@ cd build && ctest --output-on-failure && cd ..
 
 ## Expected output
 
-At M0 the "sensor" reads the truth exactly and the "estimator" repeats the latest reading, so
+Until M2/M3, the "sensor" reads the truth exactly and the "estimator" repeats the latest reading, so
 every error metric is zero. That is correct for a skeleton and proves the pipeline, not the
 filter:
 
@@ -113,15 +116,15 @@ def test_header(...):
 ## Limitations
 
 - The sensor is exact and the estimator is a passthrough. There is no noise, no Kalman filter,
-  no plot, and no sidecar JSON yet (milestones M1 to M4).
-- One dimension, constant velocity, no acceleration.
-- 39 of 61 Must requirements have no passing test yet. `req_trace.py` prints the list; the
+  no plot, and no sidecar JSON yet (milestones M2 to M4).
+- One dimension. Acceleration, if any, is constant and known; Euler's error bound is `a·t·dt/2`.
+- 38 of 61 Must requirements have no passing test yet. `req_trace.py` prints the list; the
   coverage gate (`--require-coverage`) is switched on in M5.
-- CI configuration is written but has not run on GitHub yet.
+- CI runs on every push (GCC 13 and Clang 18) and has passed on the pushed branches.
 
 ## Next steps
 
-M1 truth with acceleration, M2 seeded noisy sensor and the sidecar, M3 Kalman filter checked
+M2 seeded noisy sensor and the sidecar, M3 Kalman filter checked
 against the hand-computed vector VV-EST-01, M4 analysis plot and coverage metrics, M5
 sanitizers and the coverage gate. See baseline section 6.7.
 

@@ -1,19 +1,19 @@
-# Architecture (as built at M0)
+# Architecture (as built at M1)
 
 The design of record is [systems-engineering-baseline.md](systems-engineering-baseline.md)
 sections 7 (design) and 8 (interfaces). This page records only what the code does today and
 the choices made while building the skeleton (DOC-002). Update it whenever either changes.
 
-## What exists at M0
+## What exists
 
 | Piece | State |
 |---|---|
-| `Dynamics` (`propagate`) | Real, constant velocity only. Acceleration is M1 |
+| `Dynamics` (`propagate`) | Real: explicit Euler with optional constant acceleration (`--accel`) |
 | `PassthroughSensor` | Stand-in: exact position every M steps. Seeded noise is M2 |
 | `PassthroughEstimator` | Stand-in: repeats the latest reading. Kalman filter is M3 |
 | `Runner` | Real: implements the call order of baseline 7.4 exactly |
 | `CsvRecorder` | Real: exact header, 17 digits, empty = missing, atomic rename |
-| CLI | Real subset: the seven flags the skeleton uses, exit codes 0/1/2 |
+| CLI | Real subset: the eight flags in use (`--accel` added in M1), exit codes 0/1/2 |
 | Sidecar JSON (IF-08) | Not built (M2) |
 | `analyze.py` | Header check and RMSE. Plot, coverage, metrics JSON are M4 |
 
@@ -34,6 +34,7 @@ the choices made while building the skeleton (DOC-002). Update it whenever eithe
 | S-11 | `tools/trace.py` renamed `tools/req_trace.py` | Keep the name | `import trace` shadowed the standard-library `trace` module and only worked because `pytest.ini` puts `tools/` first on the path |
 | S-12 | `steps` is bounded above by `kMaxSteps = 100000` in `config.hpp`, checked in `DynamicsConfig::validate()`; `--help` text is built from the constant | No limit; limit only in the CLI | A typo such as `--steps 1000000000000` would run for hours and fill the disk. Checking in `validate()` makes the runner enforce it too (SIM-006). The baseline §8.3 flag table still says "integer ≥ 0" and should be updated at the next baseline revision |
 | S-13 | `analyze.py` converts every numeric cell through one helper that raises `CsvFormatError` naming the data row, step and column, and rejects empty, non-numeric and non-finite cells, ragged rows and non-UTF-8 files | Let `float()` raise | A bad file now produces `analyze: error: ...` and exit 1 instead of a traceback |
+| S-14 | Euler order is fixed: position uses the OLD velocity, then velocity is updated. The error against exact kinematics is `a·t·dt/2`, tested at every step and against VV-SIM-01 (5995.0 m, 110.0 m/s) | Semi-implicit Euler (position uses the NEW velocity); RK4; closed form | The baseline names explicit Euler (DD-006) and VV-SIM-01 fixes the numbers. Semi-implicit would give 6005.0 m and silently change the documented bound; a mutation test confirmed the tests catch that. RK4 and the closed form are exact for constant acceleration but would hide the error bound SIM-004 asks us to document |
 
 ## Not decided here
 
