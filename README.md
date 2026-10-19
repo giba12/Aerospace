@@ -59,7 +59,7 @@ cd build && ctest --output-on-failure && cd ..
 .venv/bin/python python/analyze.py run.csv
 
 # 5. Check requirement traceability
-.venv/bin/python tools/trace.py --requirements docs/requirements.csv \
+.venv/bin/python tools/req_trace.py --requirements docs/requirements.csv \
     --junit build/test-reports/gtest.xml build/test-reports/pytest.xml
 ```
 
@@ -91,7 +91,7 @@ and sample output arrive in M4.
 | `tests/gtest/` | GoogleTest adapter. The only place that knows the framework |
 | `tests/system/`, `tests/python/` | pytest: black-box tests of `sim`, and unit tests of the Python tools |
 | `python/` | `analyze.py` and the pinned `requirements.txt` |
-| `tools/trace.py` | Requirement-to-test traceability and its CI gate |
+| `tools/req_trace.py` | Requirement-to-test traceability and its CI gate |
 | `docs/` | Requirements, baseline, architecture, and `requirements.csv` (the ID registry) |
 
 ## Writing a test
@@ -108,14 +108,14 @@ TEST(Runner, CallOrderMatchesSpecification) {
 def test_header(...):
 ```
 
-`tools/trace.py` fails on an unknown ID or on a test that cites none.
+`tools/req_trace.py` fails on an unknown ID or on a test that cites none.
 
 ## Limitations
 
 - The sensor is exact and the estimator is a passthrough. There is no noise, no Kalman filter,
   no plot, and no sidecar JSON yet (milestones M1 to M4).
 - One dimension, constant velocity, no acceleration.
-- 39 of 61 Must requirements have no passing test yet. `trace.py` prints the list; the
+- 39 of 61 Must requirements have no passing test yet. `req_trace.py` prints the list; the
   coverage gate (`--require-coverage`) is switched on in M5.
 - CI configuration is written but has not run on GitHub yet.
 

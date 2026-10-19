@@ -44,7 +44,7 @@ jobs:
       # milestone M5 (baseline 6.7), when every Must requirement is expected to have a test.
       - name: Traceability
         run: >
-          .venv/bin/python tools/trace.py --requirements docs/requirements.csv
+          .venv/bin/python tools/req_trace.py --requirements docs/requirements.csv
           --junit build/test-reports/gtest.xml build/test-reports/pytest.xml
           --matrix-out build/test-reports/traceability.md
 

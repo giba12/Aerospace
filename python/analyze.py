@@ -23,13 +23,43 @@ class CsvFormatError(ValueError):
 
 
 def read_rows(path):
-    """Return the CSV as a list of dicts of strings. Raises CsvFormatError on a bad header."""
+    """Return the CSV as a list of dicts of strings.
+
+    Raises CsvFormatError on a bad header, a row with the wrong number of fields, or a file
+    that is not UTF-8 text. (A missing file still raises OSError.)
+    """
     with open(path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
-        if reader.fieldnames != EXPECTED_HEADER:
-            raise CsvFormatError(
-                f"{path}: header is {reader.fieldnames}, expected {EXPECTED_HEADER}")
-        return list(reader)
+        try:
+            if reader.fieldnames != EXPECTED_HEADER:
+                raise CsvFormatError(
+                    f"{path}: header is {reader.fieldnames}, expected {EXPECTED_HEADER}")
+            rows = []
+            for row in reader:
+                # DictReader pads a short row with None and files extra fields under key None.
+                if None in row or None in row.values():
+                    raise CsvFormatError(
+                        f"{path}: line {reader.line_num}: expected "
+                        f"{len(EXPECTED_HEADER)} fields")
+                rows.append(row)
+            return rows
+        except (UnicodeDecodeError, csv.Error) as e:
+            raise CsvFormatError(f"{path}: not a readable CSV text file: {e}") from e
+
+
+def _number(row, column, index):
+    """Return row[column] as a finite float, or raise CsvFormatError naming row and column."""
+    where = f"data row {index} (step {row.get('step')!r}), column {column}"
+    text = row.get(column)
+    if text is None or text.strip() == "":
+        raise CsvFormatError(f"{where}: value is missing")
+    try:
+        value = float(text)
+    except ValueError:
+        raise CsvFormatError(f"{where}: not a number: {text!r}") from None
+    if not math.isfinite(value):
+        raise CsvFormatError(f"{where}: not finite: {text!r}")
+    return value
 
 
 def _rmse(errors):
@@ -38,12 +68,15 @@ def _rmse(errors):
 
 def compute_metrics(rows):
     """RMSE of the raw measurement and of the estimate, over measurement rows only."""
-    meas_rows = [r for r in rows if r["meas_pos_m"] != ""]
+    meas_rows = [(i, r) for i, r in enumerate(rows) if r["meas_pos_m"] != ""]
     if not meas_rows:
         raise CsvFormatError("no row has a measurement; RMSE is undefined")
-    meas_err = [float(r["meas_pos_m"]) - float(r["true_pos_m"]) for r in meas_rows]
-    est_pos_err = [float(r["est_pos_m"]) - float(r["true_pos_m"]) for r in meas_rows]
-    est_vel_err = [float(r["est_vel_mps"]) - float(r["true_vel_mps"]) for r in meas_rows]
+    meas_err, est_pos_err, est_vel_err = [], [], []
+    for i, r in meas_rows:
+        true_pos = _number(r, "true_pos_m", i)
+        meas_err.append(_number(r, "meas_pos_m", i) - true_pos)
+        est_pos_err.append(_number(r, "est_pos_m", i) - true_pos)
+        est_vel_err.append(_number(r, "est_vel_mps", i) - _number(r, "true_vel_mps", i))
     return {
         "n_rows": len(rows),
         "n_measurements": len(meas_rows),

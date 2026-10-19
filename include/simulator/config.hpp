@@ -5,6 +5,12 @@
 
 namespace sim {
 
+// Upper bound on `steps`. This is an educational tool: the default run is 1000 steps. A row is
+// about 45 bytes today and may reach roughly 200 bytes once noisy 17-digit values are
+// recorded, so 100000 steps is a file of 5 to 20 MB that analyze.py can still hold in memory. The bound stops a typo such as --steps 1000000000000 from running
+// for hours and filling the disk. Raise it here if a larger study is ever needed (SIM-006).
+inline constexpr std::int64_t kMaxSteps = 100000;
+
 // Settings for the truth model. M0 carries only what the skeleton uses.
 // M1 adds accel_mps2 (SIM-004).
 struct DynamicsConfig {

@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <stdexcept>
+#include <string>
 
 namespace sim {
 
@@ -11,6 +12,9 @@ void DynamicsConfig::validate() const {
     }
     if (steps < 0) {
         throw std::invalid_argument("steps: must be >= 0");
+    }
+    if (steps > kMaxSteps) {
+        throw std::invalid_argument("steps: must be <= " + std::to_string(kMaxSteps));
     }
     if (!std::isfinite(x0_m)) {
         throw std::invalid_argument("x0_m: must be finite");

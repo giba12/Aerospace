@@ -31,6 +31,9 @@ the choices made while building the skeleton (DOC-002). Update it whenever eithe
 | S-8 | Registry `docs/requirements.csv` generated from baseline 6.5 | Parse the markdown at run time | A CSV is stable to parse. Cost: two sources until REQ v0.2 is issued |
 | S-9 | `tests/python/` added for unit tests of the Python tools | Put them in `tests/system/` | They are not system tests. One directory beyond baseline 7.8 |
 | S-10 | `analyze.py` uses the standard library only; `requirements.txt` pins pytest only | Add pandas/matplotlib now | Nothing imports them yet; add them, pinned, in M4 |
+| S-11 | `tools/trace.py` renamed `tools/req_trace.py` | Keep the name | `import trace` shadowed the standard-library `trace` module and only worked because `pytest.ini` puts `tools/` first on the path |
+| S-12 | `steps` is bounded above by `kMaxSteps = 100000` in `config.hpp`, checked in `DynamicsConfig::validate()`; `--help` text is built from the constant | No limit; limit only in the CLI | A typo such as `--steps 1000000000000` would run for hours and fill the disk. Checking in `validate()` makes the runner enforce it too (SIM-006). The baseline §8.3 flag table still says "integer ≥ 0" and should be updated at the next baseline revision |
+| S-13 | `analyze.py` converts every numeric cell through one helper that raises `CsvFormatError` naming the data row, step and column, and rejects empty, non-numeric and non-finite cells, ragged rows and non-UTF-8 files | Let `float()` raise | A bad file now produces `analyze: error: ...` and exit 1 instead of a traceback |
 
 ## Not decided here
 
