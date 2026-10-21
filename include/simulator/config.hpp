@@ -23,9 +23,11 @@ struct DynamicsConfig {
     void validate() const;
 };
 
-// Settings for the sensor. M2 adds sigma_m and seed (SEN-003, SEN-004).
+// Settings for the sensor.
 struct SensorConfig {
+    double sigma_m{5.0};  // standard deviation of the position noise; 0 means exact (SEN-003)
     std::int64_t every_n_steps{5};
+    std::uint64_t seed{42};  // same seed and settings give the same readings (SEN-004)
     std::string sensor_id{"pos0"};
 
     // Throws std::invalid_argument naming the offending parameter (SEN-007).

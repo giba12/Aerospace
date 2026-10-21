@@ -26,10 +26,23 @@ add_library(simcore STATIC
   src/cli.cpp
   src/dynamics.cpp
   src/estimator.cpp
+  src/output_util.cpp
   src/recorder.cpp
   src/runner.cpp
-  src/sensor.cpp)
+  src/sensor.cpp
+  src/sidecar.cpp)
 target_include_directories(simcore PUBLIC include)
+
+# Source revision for the sidecar's build info (OUT-003). Read when CMake configures, so it can be
+# stale after a later commit until you re-run cmake; the sidecar says `null` if git is unavailable.
+execute_process(COMMAND git describe --always --dirty --abbrev=12
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  OUTPUT_VARIABLE SIM_SOURCE_REVISION OUTPUT_STRIP_TRAILING_WHITESPACE
+  RESULT_VARIABLE SIM_GIT_RESULT ERROR_QUIET)
+if(SIM_GIT_RESULT EQUAL 0 AND SIM_SOURCE_REVISION)
+  set_source_files_properties(src/sidecar.cpp PROPERTIES
+    COMPILE_DEFINITIONS "SIM_SOURCE_REVISION=\"${SIM_SOURCE_REVISION}\"")
+endif()
 sim_enable_warnings(simcore)
 
 # The executable is deliberately tiny: main() makes one call into simcore.
