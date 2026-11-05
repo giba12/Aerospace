@@ -102,6 +102,22 @@ const std::vector<FlagSpec>& flags() {
          [](RunConfig& c, const std::string& f, const std::string& v) {
              c.sensor.seed = parse_u64(f, v);
          }},
+        {"--est-q", "m^2/s^3", "0.1", "filter process noise: unmodelled jiggle it allows (finite, >= 0)",
+         [](RunConfig& c, const std::string& f, const std::string& v) {
+             c.estimator.q_m2ps3 = parse_double(f, v);
+         }},
+        {"--est-r", "m^2", "25", "variance the filter ASSUMES the sensor has (finite, > 0); independent of --sigma",
+         [](RunConfig& c, const std::string& f, const std::string& v) {
+             c.estimator.r_m2 = parse_double(f, v);
+         }},
+        {"--est-p0-pos", "m^2", "25", "filter's starting doubt about position (finite, >= 0)",
+         [](RunConfig& c, const std::string& f, const std::string& v) {
+             c.estimator.p0_pos_m2 = parse_double(f, v);
+         }},
+        {"--est-p0-vel", "m^2/s^2", "100", "filter's starting doubt about velocity (finite, >= 0)",
+         [](RunConfig& c, const std::string& f, const std::string& v) {
+             c.estimator.p0_vel_m2ps2 = parse_double(f, v);
+         }},
         {"--sensor-id", "-", "pos0", "sensor name (non-empty, no commas)",
          [](RunConfig& c, const std::string&, const std::string& v) { c.sensor.sensor_id = v; }},
         {"--out", "path", "run.csv", "output CSV path",
@@ -167,9 +183,10 @@ int cli_main(const std::vector<std::string>& args, std::ostream& out, std::ostre
         }
         cfg.dynamics.validate();
         cfg.sensor.validate();
+        cfg.estimator.validate();
 
         NoisySensor sensor(cfg.sensor);
-        PassthroughEstimator estimator;
+        KalmanEstimator estimator(cfg.estimator);
         CsvRecorder recorder(cfg.out_path);
         AtomicFile sidecar(sidecar_path(cfg.out_path));  // staged now so a bad path fails early
         sidecar.stream() << sidecar_json(cfg);

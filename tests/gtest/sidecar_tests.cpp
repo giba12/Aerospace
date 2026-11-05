@@ -28,7 +28,7 @@ TEST(Sidecar, RecordsEffectiveSettingsAndTheSeed) {
     EXPECT_TRUE(contains(json, "\"sigma_m\": 2.5"));
     EXPECT_TRUE(contains(json, "\"seed\": 18446744073709551615"));  // full 64 bits, as an integer
     EXPECT_TRUE(contains(json, "\"steps\": 1000"));
-    EXPECT_TRUE(contains(json, "\"est_q_m2ps3\": null"));  // no estimator parameters until M3
+    EXPECT_TRUE(contains(json, "\"est_r_m2\": 25"));  // the filter's assumed variance, recorded as a number
     EXPECT_EQ(json.substr(json.size() - 2), "}\n");
 }
 

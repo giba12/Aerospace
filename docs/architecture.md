@@ -10,11 +10,11 @@ the choices made while building the skeleton (DOC-002). Update it whenever eithe
 |---|---|
 | `Dynamics` (`propagate`) | Real: explicit Euler with optional constant acceleration (`--accel`) |
 | `NoisySensor` | Real: position + sigma x z every M steps, z a standard-normal draw from a seeded `std::mt19937_64`; sigma 0 is exact |
-| `PassthroughEstimator` | Stand-in: repeats the latest reading. Kalman filter is M3 |
+| `KalmanEstimator` (+ `kalman_predict` / `kalman_update`) | Real: linear Kalman filter, Joseph-form update; the maths is two pure functions in `kalman.hpp`, the class is the state machine |
 | `Runner` | Real: implements the call order of baseline 7.4 exactly |
 | `CsvRecorder` | Real: exact header, 17 digits, empty = missing, atomic rename |
-| CLI | Real subset: the ten flags in use (`--accel` added in M1; `--sigma`, `--seed` in M2), exit codes 0/1/2 |
-| Sidecar JSON (IF-08) | Real: `<out>.config.json`, 16 flat keys, schema_version 1; the four estimator keys are `null` until M3 |
+| CLI | Real subset: the fourteen flags in use (`--accel` added in M1; `--sigma`, `--seed` in M2; `--est-q`, `--est-r`, `--est-p0-pos`, `--est-p0-vel` in M3), exit codes 0/1/2 |
+| Sidecar JSON (IF-08) | Real: `<out>.config.json`, 16 flat keys, schema_version 1; since M3 the four estimator keys hold the filter's settings |
 | `analyze.py` | Header check and RMSE. Plot, coverage, metrics JSON are M4 |
 
 ## Decisions made while scaffolding
@@ -42,6 +42,10 @@ the choices made while building the skeleton (DOC-002). Update it whenever eithe
 | S-19 | Sidecar estimator keys are `null` at M2 (CR-25) | Omit them; add `EstimatorConfig` and `--est-*` flags now | Keeps one key set for schema_version 1 across M2 and M3 without flags that a stand-in would ignore |
 | S-20 | `--seed` uses a dedicated unsigned parser that rejects a leading minus sign | `strtoull` alone | `strtoull("-1")` silently wraps to 2^64 - 1 |
 | S-21 | `source_revision` comes from `git describe --always --dirty` at CMake configure time, `null` without git | Run git at build time or at run time | Cheap and deterministic per build; it can be stale after a later commit until cmake is re-run |
+| S-22 | The filter maths is two pure functions (`kalman_predict`, `kalman_update`) on a `KalmanState`; `KalmanEstimator` is a thin state machine around them | Put the maths inside the class | VV-EST-01 starts from a hand-picked belief `[0, 10]` that initialization can never produce; the Python cross-check (DD-012) mirrors the same two functions. Adds `kalman.hpp` and `kalman.cpp` beyond baseline 7.8 |
+| S-23 | `PassthroughEstimator` was removed, not kept | Keep it as a baseline for comparison | Baseline 7.5 describes the raw sensor as the comparison; keeping dead code that tests no longer use invites confusion |
+| S-24 | The `--est-*` flags and real sidecar values arrive together with the filter (M3) | Add them in M2 (rejected in CR-25) | Honours S-19: no flag exists that something ignores. Closes the `null` placeholder from CR-25 |
+| S-25 | A reading older than the last accepted one is rejected; an equal timestamp is accepted. The "last reading" time is tracked separately from the filter's own clock | Compare against the filter clock | The filter clock is advanced by `+= dt` and drifts by rounding from the runner's `k * dt` timestamps; comparing against it would reject valid readings |
 
 ## Not decided here
 

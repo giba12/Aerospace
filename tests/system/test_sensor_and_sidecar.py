@@ -61,18 +61,19 @@ def test_default_noise_has_the_requested_mean_and_spread(run_sim, tmp_path):
     assert statistics.stdev(noise) == pytest.approx(5.0, rel=0.05)
 
 
-@pytest.mark.req("OUT-003")
+@pytest.mark.req("OUT-003", "EST-005")
 def test_sidecar_has_the_contract_keys_and_records_the_run(run_sim, tmp_path):
     args = ["--steps", "50", "--dt", "0.2", "--x0", "3", "--v0", "-4", "--accel", "0.5",
             "--meas-every", "7", "--sigma", "2.5", "--seed", "18446744073709551615",
-            "--sensor-id", "gps1", "--out", "out.csv"]
+            "--sensor-id", "gps1", "--est-q", "0.2", "--est-r", "9", "--est-p0-pos", "4",
+            "--est-p0-vel", "16", "--out", "out.csv"]
     assert run_sim(*args).returncode == 0
     side = json.loads((tmp_path / "out.csv.config.json").read_text())
     assert list(side) == SIDECAR_KEYS
     assert (side["schema_version"], side["steps"], side["dt_s"], side["x0_m"], side["v0_mps"]) == (1, 50, 0.2, 3, -4)
     assert (side["accel_mps2"], side["meas_every"], side["sigma_m"], side["sensor_id"]) == (0.5, 7, 2.5, "gps1")
     assert side["seed"] == 2**64 - 1
-    assert all(side[k] is None for k in SIDECAR_KEYS if k.startswith("est_"))  # no estimator params until M3
+    assert (side["est_q_m2ps3"], side["est_r_m2"], side["est_p0_pos_m2"], side["est_p0_vel_m2ps2"]) == (0.2, 9, 4, 16)
     assert side["compiler"].startswith(("gcc ", "clang "))
     assert side["source_revision"] is None or isinstance(side["source_revision"], str)
     assert all(math.isfinite(v) for v in side.values() if isinstance(v, float))

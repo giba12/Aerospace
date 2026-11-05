@@ -54,6 +54,7 @@ struct EstimatorConfig {
 struct RunConfig {
     DynamicsConfig dynamics;
     SensorConfig sensor;
+    EstimatorConfig estimator;
     std::string out_path{"run.csv"};
 };
 
