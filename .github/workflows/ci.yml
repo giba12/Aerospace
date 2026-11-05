@@ -40,6 +40,14 @@ jobs:
       - name: Test
         run: cd build && ctest --output-on-failure
 
+      # The README's step 4: run the simulator and analyze it, so the plot and metrics.json are
+      # produced on every push and uploaded below.
+      - name: Example run and analysis
+        run: |
+          ./build/sim --steps 1000 --out build/test-reports/run.csv
+          .venv/bin/python python/analyze.py build/test-reports/run.csv \
+            --metrics-json build/test-reports/metrics.json --plot build/test-reports/plot.png
+
       # The gate checks unknown IDs and orphan tests now. `--require-coverage` is added in
       # milestone M5 (baseline 6.7), when every Must requirement is expected to have a test.
       - name: Traceability
