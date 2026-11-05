@@ -31,6 +31,20 @@ static_assert(std::is_same<decltype(sim::TrueState::t_s), double>::value, "t_s i
 static_assert(std::is_same<decltype(sim::TrueState::position_m), double>::value, "position_m");
 static_assert(std::is_same<decltype(sim::TrueState::velocity_mps), double>::value, "velocity_mps");
 
+// SEN-001: a measurement is a position only. Detects a member named velocity_mps (TrueState has
+// one, which proves the detector works; Measurement must not).
+template <typename T, typename = void>
+struct HasVelocity : std::false_type {};
+template <typename T>
+struct HasVelocity<T, std::void_t<decltype(std::declval<T>().velocity_mps)>> : std::true_type {};
+static_assert(HasVelocity<sim::TrueState>::value, "detector sanity check");
+static_assert(!HasVelocity<sim::Measurement>::value, "a measurement must not carry velocity");
+
+TEST(Interfaces, MeasurementHasNoVelocityField) {
+    RecordProperty("requirements", "SEN-001");
+    SUCCEED();  // checked at compile time above; this registers the requirement tag
+}
+
 TEST(Interfaces, TrueStateHoldsTimePositionAndVelocity) {
     RecordProperty("requirements", "SIM-001");
     const sim::TrueState s{1.5, 2.5, 3.5};

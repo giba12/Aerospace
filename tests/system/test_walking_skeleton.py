@@ -29,6 +29,11 @@ def test_default_run_writes_header_and_n_plus_one_rows(run_sim, tmp_path):
     (["--steps", "100001"], "steps"),
     (["--steps", "-1"], "steps"),
     (["--accel", "nan"], "accel_mps2"),
+    (["--sigma", "-1"], "sigma_m"),
+    (["--sigma", "nan"], "sigma_m"),
+    (["--seed", "-1"], "--seed"),
+    (["--seed", "18446744073709551616"], "--seed"),
+    (["--seed", "abc"], "--seed"),
     (["--accel", "fast"], "--accel"),
     (["--dt", "0"], "dt_s"),
     (["--meas-every", "0"], "every_n_steps"),
@@ -52,7 +57,8 @@ def test_unwritable_output_exits_1(run_sim):
 def test_help_lists_every_flag_with_its_unit_and_default(run_sim):
     result = run_sim("--help")
     assert result.returncode == 0
-    for flag in ("--steps", "--dt", "--x0", "--v0", "--accel", "--meas-every", "--sensor-id", "--out"):
+    for flag in ("--steps", "--dt", "--x0", "--v0", "--accel", "--meas-every", "--sigma", "--seed",
+                 "--sensor-id", "--out"):
         assert flag in result.stdout
 
 

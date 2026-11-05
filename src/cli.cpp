@@ -3,17 +3,21 @@
 #include <cerrno>
 #include <cstdint>
 #include <cstdlib>
+#include <filesystem>
 #include <functional>
 #include <iostream>
 #include <stdexcept>
+#include <system_error>
 #include <string>
 #include <vector>
 
 #include "simulator/config.hpp"
 #include "simulator/estimator.hpp"
+#include "simulator/output_util.hpp"
 #include "simulator/recorder.hpp"
 #include "simulator/runner.hpp"
 #include "simulator/sensor.hpp"
+#include "simulator/sidecar.hpp"
 
 namespace sim {
 namespace {
@@ -38,6 +42,18 @@ std::int64_t parse_int(const std::string& flag, const std::string& text) {
     const long long value = std::strtoll(text.c_str(), &end, 10);
     if (text.empty() || end != text.c_str() + text.size() || errno == ERANGE) {
         throw UsageError(flag + ": not an integer: '" + text + "'");
+    }
+    return value;
+}
+
+// Unsigned 64-bit (the seed). strtoull would accept "-1" and wrap it to 2^64 - 1, so a leading
+// minus sign is rejected explicitly.
+std::uint64_t parse_u64(const std::string& flag, const std::string& text) {
+    errno = 0;
+    char* end = nullptr;
+    const unsigned long long value = std::strtoull(text.c_str(), &end, 10);
+    if (text.empty() || text[0] == '-' || end != text.c_str() + text.size() || errno == ERANGE) {
+        throw UsageError(flag + ": not an unsigned integer: '" + text + "'");
     }
     return value;
 }
@@ -77,6 +93,14 @@ const std::vector<FlagSpec>& flags() {
         {"--accel", "m/s^2", "0", "constant acceleration (finite)",
          [](RunConfig& c, const std::string& f, const std::string& v) {
              c.dynamics.accel_mps2 = parse_double(f, v);
+         }},
+        {"--sigma", "m", "5", "sensor noise standard deviation (finite, >= 0)",
+         [](RunConfig& c, const std::string& f, const std::string& v) {
+             c.sensor.sigma_m = parse_double(f, v);
+         }},
+        {"--seed", "-", "42", "random seed (unsigned 64-bit integer)",
+         [](RunConfig& c, const std::string& f, const std::string& v) {
+             c.sensor.seed = parse_u64(f, v);
          }},
         {"--sensor-id", "-", "pos0", "sensor name (non-empty, no commas)",
          [](RunConfig& c, const std::string&, const std::string& v) { c.sensor.sensor_id = v; }},
@@ -144,10 +168,19 @@ int cli_main(const std::vector<std::string>& args, std::ostream& out, std::ostre
         cfg.dynamics.validate();
         cfg.sensor.validate();
 
-        PassthroughSensor sensor(cfg.sensor);
+        NoisySensor sensor(cfg.sensor);
         PassthroughEstimator estimator;
         CsvRecorder recorder(cfg.out_path);
-        run(cfg.dynamics, sensor, estimator, recorder);
+        AtomicFile sidecar(sidecar_path(cfg.out_path));  // staged now so a bad path fails early
+        sidecar.stream() << sidecar_json(cfg);
+        run(cfg.dynamics, sensor, estimator, recorder);  // commits the CSV
+        try {
+            sidecar.commit();
+        } catch (...) {  // exit 1 promises no CSV left behind (IF-02)
+            std::error_code ignored;
+            std::filesystem::remove(cfg.out_path, ignored);
+            throw;
+        }
         return kExitOk;
     } catch (const UsageError& e) {
         err << "sim: error: " << e.what() << '\n';

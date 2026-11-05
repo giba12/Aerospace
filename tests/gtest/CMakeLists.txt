@@ -12,7 +12,9 @@ add_executable(sim_gtest_tests
   estimator_tests.cpp
   interface_tests.cpp
   recorder_tests.cpp
-  runner_tests.cpp)
+  runner_tests.cpp
+  sensor_tests.cpp
+  sidecar_tests.cpp)
 target_link_libraries(sim_gtest_tests PRIVATE sim_test_support GTest::gtest_main)
 sim_enable_warnings(sim_gtest_tests)
 

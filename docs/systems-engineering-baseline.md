@@ -5,8 +5,8 @@
 | | |
 |---|---|
 | **Document ID** | SEB-001 |
-| **Version / status** | 0.2 DRAFT (CR-24 applied). **Tentative proposal; not baselined.** |
-| **Date** | 2026-10-10 (v0.1); 2026-10-19 (v0.2) |
+| **Version / status** | 0.3 DRAFT (CR-24, CR-25 applied). **Tentative proposal; not baselined.** |
+| **Date** | 2026-10-10 (v0.1); 2026-10-19 (v0.2, v0.3) |
 | **System** | Sensor and State-Estimation Simulator (working name `sensor-sim`) |
 | **Prepared for** | Project owner (learner), 30-day sprint |
 | **Prepared by** | Claude (proposal, for owner review) |
@@ -31,6 +31,7 @@ Everything marked **[TBD]** is a value to be confirmed once the C++ implementati
 |---|---|---|
 | 0.1 | 2026-10-10 | First proposal, derived from the three source documents and a throwaway prototype of the reference scenario (Appendix A). |
 | 0.2 | 2026-10-19 | CR-24 applied: position tolerance now scales with run length and position size (§6.3, SIM-003, SIM-004, §6.5). |
+| 0.3 | 2026-10-19 | CR-25 applied: sidecar estimator keys may be `null` (§8.5); §8.3 `--steps` range. |
 
 ---
 
@@ -600,7 +601,7 @@ public:
 
 | Flag | Unit | Type and rule | Default |
 |---|---|---|---|
-| `--steps` | steps | integer ≥ 0 | 1000 |
+| `--steps` | steps | integer 0 to 100000 (CR-25) | 1000 |
 | `--dt` | s | finite > 0 | 0.1 |
 | `--x0` | m | finite | 0 |
 | `--v0` | m/s | finite | 10 |
@@ -632,6 +633,8 @@ public:
 ### 8.5 Sidecar JSON contract (IF-08), file `<out>.config.json`
 
 Flat object. Required keys: `schema_version` (integer), `steps`, `dt_s`, `x0_m`, `v0_mps`, `accel_mps2`, `meas_every`, `sigma_m`, `seed`, `sensor_id`, `est_q_m2ps3`, `est_r_m2`, `est_p0_pos_m2`, `est_p0_vel_m2ps2`, `compiler`, `source_revision` (string or `null`).
+
+An estimator key (`est_*`) is `null` when the estimator in use has no such parameter (the M0/M2 stand-in), so the key set is the same in every `schema_version` 1 file (CR-25).
 
 ### 8.6 Exit codes and messages (IF-02)
 
@@ -690,6 +693,7 @@ Severity: **High** the project could produce a wrong or unverifiable result; **M
 | CR-22 | Medium | G | No stakeholder-need or system-requirement layer | §2, §3.2 |
 | CR-23 | Medium | G | Command-line contract incomplete | §8.3, §8.6, CFG-002 |
 | CR-24 | Medium | G, A | Fixed 1e-9 m position tolerance cannot be met for long or large runs | §6.3, SIM-003, SIM-004 |
+| CR-25 | Low | G | Sidecar estimator keys before the Kalman filter exists | §8.5, §8.3 |
 
 Each change request below states: **what it is** (the finding), **what I recommend**, **why**, **what it does**, and **likely outcome** for the system.
 
@@ -878,6 +882,14 @@ Each change request below states: **what it is** (the finding), **what I recomme
 - **Why:** pytest system tests (TST-008) and users need a stable interface to code against.
 - **What it does:** Fixes names, units, defaults and failure behavior.
 - **Likely outcome:** Black-box tests that survive refactoring and a `--help` that is itself tested.
+
+### CR-25: Sidecar estimator keys before the Kalman filter exists
+*Low · Gap · §8.5 · Raised and approved 2026-10-19 (record: `docs/change-requests/CR-25-sidecar-null-estimator-keys.md`)*
+- **What it is:** §8.5 requires four estimator keys whose values do not exist until M3.
+- **Recommend:** Write them as `null` until then.
+- **Why:** One key set for `schema_version` 1 across M2 and M3, and no stand-in flags.
+- **What it does:** Adds one sentence to §8.5; also syncs the §8.3 `--steps` range with the cap.
+- **Likely outcome:** A complete, stable sidecar from M2 onward.
 
 ### CR-24: Fixed 1e-9 m position tolerance cannot be met for long or large runs
 *Medium · Gap and Ambiguity · SIM-003, SIM-004, §6.3 · Raised and approved 2026-10-19 (full record: `docs/change-requests/CR-24-position-rounding-allowance.md`)*
