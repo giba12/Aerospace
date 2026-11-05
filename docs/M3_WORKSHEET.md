@@ -1,5 +1,7 @@
 # M3 worksheet: the Kalman filter by hand (VV-EST-01)
 
+> This is a small educational simulation, not flight software, and it makes no claim of flight qualification, operational fidelity or real sensor fusion (SYS-006).
+
 **Why this exists.** The estimator is the part of the project you will be asked about most. The
 baseline (R-03) says to work one full predict-and-update step on paper *before* any filter code is
 written, so that the code is a translation of something you already understand. Do this worksheet,

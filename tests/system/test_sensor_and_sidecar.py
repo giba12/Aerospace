@@ -100,3 +100,13 @@ def test_analysis_reads_a_noisy_run_end_to_end(run_sim, tmp_path):
     metrics = analyze.compute_metrics(_rows(tmp_path))
     assert metrics["n_measurements"] == 201
     assert metrics["rmse_meas_pos_m"] > 0.0  # the sensor is no longer exact
+
+
+@pytest.mark.req("OUT-004", "CFG-002")
+def test_an_output_path_that_is_a_directory_fails_cleanly_and_leaves_it_alone(run_sim, tmp_path):
+    (tmp_path / "outdir").mkdir()
+    done = run_sim("--steps", "5", "--out", "outdir")
+    assert done.returncode == 1                       # a runtime failure, not a usage error
+    assert done.stderr.startswith("sim: error: ") and "outdir" in done.stderr
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["outdir"]   # no sidecar, no temp files
+    assert list((tmp_path / "outdir").iterdir()) == []

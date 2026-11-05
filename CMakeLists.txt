@@ -12,6 +12,27 @@ endif()
 
 option(SIM_WARNINGS_AS_ERRORS "Treat compiler warnings as errors (NFR-001)" ON)
 option(SIM_BUILD_TESTS "Build the test suites" ON)
+option(SIM_SANITIZE "Build everything with AddressSanitizer and UndefinedBehaviorSanitizer (NFR-007)" OFF)
+option(SIM_COVERAGE "Instrument for line coverage with gcov; see `cmake --build build --target coverage` (NFR-008)" OFF)
+
+if(SIM_SANITIZE AND SIM_COVERAGE)
+  message(FATAL_ERROR "SIM_SANITIZE and SIM_COVERAGE cannot be combined: build them in separate directories")
+endif()
+
+# Whole-build flags go on BEFORE any target exists so that the fetched test framework and every
+# first-party target are instrumented the same way. Any sanitizer finding aborts the process
+# (-fno-sanitize-recover) so a test cannot pass while hiding one.
+if(SIM_SANITIZE)
+  add_compile_options(-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer)
+  add_link_options(-fsanitize=address,undefined)
+endif()
+
+# Coverage needs unoptimised code or the line numbers do not match the source. GCC 13 can report
+# line and branch coverage only (condition coverage needs GCC 14; risk R-08).
+if(SIM_COVERAGE)
+  add_compile_options(--coverage -O0 -g)
+  add_link_options(--coverage)
+endif()
 
 # One place defines the warning policy; every first-party target calls it.
 function(sim_enable_warnings target)
@@ -54,4 +75,22 @@ sim_enable_warnings(sim)
 if(SIM_BUILD_TESTS)
   enable_testing()
   add_subdirectory(tests)
+endif()
+
+# `cmake --build build --target coverage` summarises line and branch coverage of simcore after the
+# tests have run (NFR-008: a goal of 90 % reported in CI, never a gate). SIM_PYTHON is the pinned
+# virtual environment, which carries gcovr. SIM_GCOV must match the compiler's gcov.
+if(SIM_COVERAGE)
+  set(SIM_GCOV "gcov" CACHE STRING "gcov executable matching the compiler (for example gcov-13)")
+  set(SIM_COVERAGE_DIR "${CMAKE_BINARY_DIR}/coverage")
+  add_custom_target(coverage
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${SIM_COVERAGE_DIR}
+    COMMAND ${SIM_PYTHON} -m gcovr --root ${CMAKE_SOURCE_DIR} --object-directory ${CMAKE_BINARY_DIR}
+            --gcov-executable ${SIM_GCOV} --exclude-throw-branches
+            --filter ${CMAKE_SOURCE_DIR}/src/ --filter ${CMAKE_SOURCE_DIR}/include/
+            --print-summary --txt ${SIM_COVERAGE_DIR}/summary.txt
+            --xml ${SIM_COVERAGE_DIR}/coverage.xml --html-details ${SIM_COVERAGE_DIR}/index.html
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMENT "Coverage of src/ and include/ (run ctest first); report in ${SIM_COVERAGE_DIR}"
+    VERBATIM)
 endif()

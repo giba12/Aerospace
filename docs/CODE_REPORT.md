@@ -1,5 +1,7 @@
 # Aerospace (`sensor-sim`) — File-by-File Code Report
 
+> This is a small educational simulation, not flight software, and it makes no claim of flight qualification, operational fidelity or real sensor fusion (SYS-006).
+
 Scope: every tracked file in the repository at commit `19e8e67` (47 files, about 4,000 lines, of which
 about 1,200 are code and the rest are documents). Code files are covered line by line (by line range where
 lines do one job together). The six large Markdown documents are summarised, not annotated.

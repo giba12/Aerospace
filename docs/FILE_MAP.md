@@ -1,5 +1,7 @@
 # File Map: what runs when, why, and who its parent is
 
+> This is a small educational simulation, not flight software, and it makes no claim of flight qualification, operational fidelity or real sensor fusion (SYS-006).
+
 "Parent" means whichever of these applies to the file:
 - **caller**: the file whose code calls into it at run time;
 - **includer**: the file that `#include`s / `import`s it;
