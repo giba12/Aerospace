@@ -26,6 +26,7 @@ add_library(simcore STATIC
   src/cli.cpp
   src/dynamics.cpp
   src/estimator.cpp
+  src/kalman.cpp
   src/output_util.cpp
   src/recorder.cpp
   src/runner.cpp

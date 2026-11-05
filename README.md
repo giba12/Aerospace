@@ -4,9 +4,10 @@
 > qualified for any use. It does not model a real sensor, real vehicle dynamics, or
 > operational sensor fusion. (SYS-006)
 
-**Status: M2 (truth model and noisy sensor complete).** Every stage of the pipeline exists and runs.
-The truth model (constant velocity or constant acceleration) and the seeded noisy sensor are real;
-the estimator is still a deliberately trivial stand-in. See [Limitations](#limitations).
+**Status: M3 in progress (Kalman filter built).** Every stage of the pipeline exists and runs.
+The truth model, the seeded noisy sensor and the Kalman filter are real. The held-out-seed
+performance tests (EST-008, EST-012), the independent Python cross-check, and the plot are still to
+come. See [Limitations](#limitations).
 
 ## What this project demonstrates
 
@@ -70,25 +71,28 @@ cd build && ctest --output-on-failure && cd ..
 
 ## Expected output
 
-The sensor adds Gaussian noise (default sigma 5 m, seed 42) and, until M3, the "estimator" just
-repeats the latest reading. So the estimate is exactly as noisy as the sensor, and its velocity is
-always 0 against a true 10 m/s. That proves the pipeline, not the filter:
+The sensor adds Gaussian noise (default sigma 5 m, seed 42) and the Kalman filter estimates position
+and velocity from those readings alone. The RMSEs are taken at the 201 steps that have a reading:
+the raw readings are off by 5.46 m, the filter's position estimate by 2.32 m (a ratio of 0.43), and
+its velocity estimate, which the sensor never measures, by 1.20 m/s:
 
 ```text
 n_rows = 1001
 n_measurements = 201
 rmse_meas_pos_m = 5.4598541120696265
-rmse_est_pos_m = 5.4598541120696265
-rmse_est_vel_mps = 10.0
+rmse_est_pos_m = 2.32142058992441
+rmse_est_vel_mps = 1.2027805245829981
 ```
+
+This is one seed. The claim that the filter beats the sensor on seeds it was not tuned on (EST-008)
+is tested separately and is not yet built.
 
 The noise values come from the C++ standard library's `std::normal_distribution`, which the
 standard leaves implementation-defined. The same seed gives identical output on the same platform
 and build; the digits above are from GCC 13.3 and other toolchains will print different noise.
 `--sigma 0` gives an exact sensor, and the sidecar `run.csv.config.json` records every setting.
 
-(The velocity error is 10 because the stand-in estimator reports a velocity of 0.) A real plot
-and sample output arrive in M4.
+A real plot and sample output arrive in M4.
 
 ## Repository layout
 
@@ -120,19 +124,21 @@ def test_header(...):
 
 ## Limitations
 
-- The estimator is a passthrough: it repeats the latest reading, so it is no better than the
-  sensor. There is no Kalman filter and no plot yet (milestones M3 and M4). The sidecar's
-  estimator keys are `null` until M3.
+- The filter assumes constant velocity. If the truth accelerates (`--accel`), it is wrong in a way
+  the position RMSE barely shows; the baseline's prototype measured the true value inside the
+  filter's own error bars only 45 % of the time at 0.5 m/s^2 (scenario S-ACCEL-LARGE). That
+  check (EST-012) is not built yet.
+- There is no plot yet (M4), and the held-out-seed performance tests and the independent Python
+  cross-check of the filter are still to come (rest of M3).
 - Sensor noise is reproducible only on the same platform and build (see Expected output).
 - One dimension. Acceleration, if any, is constant and known; Euler's error bound is `a·t·dt/2`.
-- 28 of 61 Must requirements have no passing test yet. `req_trace.py` prints the list; the
+- 18 of 61 Must requirements have no passing test yet. `req_trace.py` prints the list; the
   coverage gate (`--require-coverage`) is switched on in M5.
 - CI runs on every push (GCC 13 and Clang 18) and has passed on the pushed branches.
 
 ## Next steps
 
-M3 Kalman filter checked
-against the hand-computed vector VV-EST-01, M4 analysis plot and coverage metrics, M5
+Finish M3 (held-out-seed tests EST-008 and EST-012, and the Python cross-check), M4 analysis plot and coverage metrics, M5
 sanitizers and the coverage gate. See baseline section 6.7.
 
 ## Troubleshooting
