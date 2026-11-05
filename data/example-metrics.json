@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "n_rows": 1001,
+  "n_measurements": 201,
+  "rmse_meas_pos_m": 5.4598541120696265,
+  "rmse_est_pos_m": 2.32142058992441,
+  "rmse_est_vel_mps": 1.2027805245829981,
+  "improvement_ratio": 0.42517996676736225,
+  "frac_pos_within_2sigma": 0.9402985074626866
+}
