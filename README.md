@@ -4,12 +4,14 @@
 > qualified for any use. It does not model a real sensor, real vehicle dynamics, or
 > operational sensor fusion. (SYS-006)
 
-**Status: M4 complete (analysis and validation record).** Every stage of the pipeline exists and
+**Status: M5 complete (hardening).** Every stage of the pipeline exists and
 runs. The truth model, the seeded noisy sensor and the Kalman filter are real. The filter is checked
 three ways: against the baseline's hand-worked vector, against an independent Python
 re-computation in exact arithmetic, and against 50 held-out random seeds (the result is recorded in
 [docs/VALIDATION.md](docs/VALIDATION.md)). `analyze.py` prints the metrics, writes `metrics.json`
-and draws the plot below. See [Limitations](#limitations).
+and draws the plot below. The whole suite also passes under AddressSanitizer and
+UndefinedBehaviorSanitizer, every Must requirement has a passing test (and CI fails the build if one
+loses it), and 94 % of the library's lines are covered by tests. See [Limitations](#limitations).
 
 ## What this project demonstrates
 
@@ -67,10 +69,29 @@ cd build && ctest --output-on-failure && cd ..
 # 5. Cross-check the filter against the independent Python re-computation (exact arithmetic)
 .venv/bin/python python/kalman_oracle.py run.csv
 
-# 6. Check requirement traceability
+# 6. Check requirement traceability. With --require-coverage this FAILS if any Must
+#    requirement has no passing test, exactly as CI does
 .venv/bin/python tools/req_trace.py --requirements docs/requirements.csv \
-    --junit build/test-reports/gtest.xml build/test-reports/pytest.xml
+    --junit build/test-reports/gtest.xml build/test-reports/pytest.xml --require-coverage
+
+# 7. Check the suite stayed inside its 30 second budget (NFR-006)
+.venv/bin/python tools/check_budget.py --junit build/test-reports/gtest.xml build/test-reports/pytest.xml
 ```
+
+### Sanitizers and coverage (optional, each in its own build directory)
+
+```bash
+# AddressSanitizer + UndefinedBehaviorSanitizer: any finding aborts, so it fails the test
+cmake -S . -B build-asan -G Ninja -DSIM_SANITIZE=ON
+cmake --build build-asan && (cd build-asan && ctest --output-on-failure)
+
+# Line and branch coverage of src/ and include/ (HTML report in build-cov/coverage/index.html)
+cmake -S . -B build-cov -G Ninja -DSIM_COVERAGE=ON
+cmake --build build-cov && (cd build-cov && ctest) && cmake --build build-cov --target coverage
+```
+
+The sanitizer build takes about twice as long to run and the coverage build is unoptimised, so neither is
+held to the 30 second budget. The two options cannot be combined.
 
 `./build/sim --help` lists every flag with its unit and default.
 
@@ -127,7 +148,7 @@ describes a different run (ANA-001); it writes `metrics.json` in the layout of b
 | `tests/system/`, `tests/python/` | pytest: black-box tests of `sim`, and unit tests of the Python tools |
 | `python/` | `analyze.py` (metrics, JSON, plot), `kalman_oracle.py` (independent re-computation), `ensemble.py` (runs many seeds, VAL-02/03), `seed_sets.py`, and the pinned `requirements.txt` |
 | `data/` | A small example plot and metrics file |
-| `tools/req_trace.py` | Requirement-to-test traceability and its CI gate |
+| `tools/req_trace.py`, `tools/check_budget.py` | Requirement-to-test traceability and its CI gate; the 30 s test-time budget |
 | `docs/` | Requirements, baseline, architecture, `VALIDATION.md` (the VAL-02/03 record), change requests, and `requirements.csv` (the ID registry) |
 
 ## Writing a test
@@ -159,14 +180,23 @@ def test_header(...):
 - Validation is on simulated data from the model the filter assumes, and the exact figures depend on the
   C++ standard library's normal distribution. See `docs/VALIDATION.md` for what it does and does not show,
   including a scenario (a reading only every 5 s) where the filter helps much less than in the reference one.
-- 12 of 61 Must requirements have no passing test yet. `req_trace.py` prints the list; the
-  coverage gate (`--require-coverage`) is switched on in M5.
-- CI runs on every push (GCC 13 and Clang 18) and has passed on the pushed branches.
+- All 61 Must requirements have a passing test, but they are not all verified the same way. Several
+  (NFR-001, NFR-005, SYS-005, SYS-006, DOC-001, TST-002, TST-008, TST-009) are verified by *automated
+  inspection* of the build files, the CI workflow and the documents (`tests/python/test_configuration_rules.py`),
+  as the baseline's verification matrix plans. They stop that configuration drifting; they are not behaviour
+  tests. That CI really builds with both compilers on every push is shown by CI's own history.
+- Coverage: about 94 % of lines (94.0 % on the development machine, 94.5 % on CI), 100 % of functions, and
+  85 to 87 % of branches with compiler-generated exception edges excluded (59.6 % locally with them). The uncovered lines are mostly `std::function` bookkeeping in
+  the flag table, plus one error path (a failed final write) that needs fault injection to reach. GCC 13
+  cannot report condition coverage. The 90 % line goal is reported, never a gate.
+- The 30 second budget is checked on every normal CI build. On the slow WSL machine this was developed on
+  the suite takes about 25 s, so the margin there is thin; on CI it takes a few seconds.
+- CI runs on every push: GCC 13 and Clang 18 builds with warnings as errors, a sanitizer job and a coverage job.
 
 ## Next steps
 
-M5 hardening (sanitizers, the coverage gate, coverage report) and M6 release (claim-to-evidence table,
-clean-room container run, tagging the baseline). See baseline section 6.7.
+M6 release (claim-to-evidence table, clean-room container run, tagging the baseline). The optional
+second test framework (Catch2, TST-010) was not built. See baseline section 6.7.
 
 ## Troubleshooting
 

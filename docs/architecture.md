@@ -1,4 +1,6 @@
-# Architecture (as built at M2)
+# Architecture (as built at M5)
+
+> This is a small educational simulation, not flight software, and it makes no claim of flight qualification, operational fidelity or real sensor fusion (SYS-006).
 
 The design of record is [systems-engineering-baseline.md](systems-engineering-baseline.md)
 sections 7 (design) and 8 (interfaces). This page records only what the code does today and
@@ -15,6 +17,7 @@ the choices made while building the skeleton (DOC-002). Update it whenever eithe
 | `CsvRecorder` | Real: exact header, 17 digits, empty = missing, atomic rename |
 | CLI | Real subset: the fourteen flags in use (`--accel` added in M1; `--sigma`, `--seed` in M2; `--est-q`, `--est-r`, `--est-p0-pos`, `--est-p0-vel` in M3), exit codes 0/1/2 |
 | Sidecar JSON (IF-08) | Real: `<out>.config.json`, 16 flat keys, schema_version 1; since M3 the four estimator keys hold the filter's settings |
+| `tools/check_budget.py` | Fails if the suite took longer than 30 s (NFR-006) |
 | `analyze.py` | Header and sidecar checks incl. `schema_version` (ANA-001), RMSE, +/-2 sigma coverage, `metrics.json` (baseline 8.7), and the labelled three-panel plot |
 | `kalman_oracle.py` | Independent re-computation of the `est_*` columns in 60-digit decimal arithmetic (VAL-04, DD-012) |
 | `seed_sets.py` (in `python/`) | The tuning and held-out seed sets (TST-012) |
@@ -59,6 +62,15 @@ the choices made while building the skeleton (DOC-002). Update it whenever eithe
 | S-33 | matplotlib is pinned at 3.10.8, not 3.10.0 | 3.10.0 | 3.10.0 triggers 100+ deprecation warnings against the newest pyparsing that pip resolves; 3.10.8 is quiet and in the same minor series. A pinned set should not teach people to ignore warnings |
 | S-34 | `ensemble.py` owns the thresholds (0.75, 0.90) and the pass/fail logic; the acceptance tests import it; `--max-seeds` exists for quick tests and the report says "partial" when used | Duplicate the logic in the tests; always run all seeds in tests | One definition of "pass". 200-seed tests took the suite from 10 s to 48 s against the 30 s budget (NFR-006); a partial run cannot masquerade as acceptance |
 | S-35 | `docs/VALIDATION.md` is built from the tool's JSON output, and the held-out and scenario results are kept separate (held-out = acceptance; scenarios run on the tuning seeds, report only) | Hand-type the numbers; run scenarios on the held-out seeds | No transcription errors, and no scenario exploration can contaminate the held-out set (TST-012) |
+| S-36 | `SIM_SANITIZE` adds `-fsanitize=address,undefined -fno-sanitize-recover=all` before any target is created, so the fetched test framework is built the same way; it cannot be combined with `SIM_COVERAGE`; CI has its own job and the 30 s budget does not apply to it | Sanitizer flags only on first-party targets; let findings print and continue | A mixed build can hide a finding at the boundary, and a finding that only prints lets a test pass over it. Checked live: a planted use-after-free was caught by ASan, a planted overflow and an out-of-bounds index by UBSan. The sanitized suite takes about twice as long |
+| S-37 | `SIM_COVERAGE` plus a `coverage` target using pinned `gcovr` with `--exclude-throw-branches`; the report is uploaded and never gates (no `--fail-under`, enforced by a test) | A gate at 90 %; `lcov` | NFR-008 says "a goal reported in CI, not a gate". Excluding compiler-generated exception edges moves branch coverage from 59.6 % to 85.3 % locally; both are stated. Lines 94.0 % locally and 94.5 % on CI (cause of the difference not investigated), functions 100 % |
+| S-38 | The 12 Musts that had no test are closed by 3 kinds of check: behaviour (ctest -N lists every test, JUnit parses, unknown framework refused, no writable global data), the new tools with unit tests (budget, fail-closed traceability), and **automated inspection** of build files, CI workflow and docs. The inspection tests say so in their docstring | Mark them verified by review only; write nothing | The baseline's verification matrix plans I and D for these. Automating the inspection stops drift, but it is weaker than a behaviour test and the README says so |
+| S-39 | `tools/check_budget.py` sums the `time` of every JUnit test case and fails over 30 s; CI runs it on the normal GCC and Clang builds only | Wrap `ctest` in `timeout 30`; per-test timeouts | One number for the whole suite including the seed ensembles (NFR-006), with a message and a unit test. Not applied to sanitizer or coverage builds, which are slower by design |
+| S-40 | `req_trace.py` fails with a clear message on a missing, unparseable or empty JUnit file | Let the traceback propagate | It already failed closed (exit 1) but with a raw traceback; an empty report would also have made the gate pass vacuously |
+| S-41 | CI passes `--require-coverage`: the build fails if any Must requirement has no passing test | Leave the gate off until release | M5's exit criterion (baseline 6.7); the registry has 61 Musts and all are covered |
+| S-42 | NFR-003 ("no hidden global state") is checked on the compiled library: `nm` must find exactly two writable data symbols, the flag table and the CSV header pointer, both constants | Extend the text grep for `rand(` and `time(` | Objective and hard to evade; any new mutable global fails it and must be justified in the allow-list. Compiler-generated `typeinfo` and `vtable` entries and sanitizer or coverage symbols are excluded by name |
+| S-43 | The Catch2 adapter (TST-010, Could) is not built | Build it | It would mean rewriting about 50 tests whose logic is inline in the GoogleTest files, for a stretch goal. TST-002 is still verified by refusing an unknown adapter and by keeping framework names out of everything except `tests/` |
+| S-44 | A one-line SYS-006 banner was added to the docs that lacked it (architecture, validation, file map, worksheet, code report); the requirement documents are exempt from the overclaim scan | Test only the README | SYS-006 says all documentation. The scan looks at whole paragraphs because a sentence can wrap, and exempts the five documents that define or discuss the requirement itself |
 
 ## Not decided here
 

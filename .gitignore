@@ -17,3 +17,4 @@ run.csv.tmp
 /run.csv.config.json
 /metrics.json
 /plot.png
+build-*/

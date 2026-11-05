@@ -89,13 +89,21 @@ Built on branch `m4-analysis` (49 of 61 Musts covered overall).
 
 Exit: sanitizers clean; traceability gate on; Clang job green; coverage reported.
 
-- [ ] ASan + UBSan CI job (NFR-007).
-- [ ] **Turn on `--require-coverage` in CI** (TST-011). Expect it to list every Must without a test.
-- [ ] Coverage report (NFR-008): needs `gcovr`, pinned. GCC 13 has no condition coverage; line
-      coverage only, target ≥ 90 % on `simcore`, reported not gated.
-- [ ] Check the test suite runs in under 30 seconds including the seed ensembles (NFR-006).
-- [ ] Check for a hidden `rand(` / `time(` / global state beyond the existing grep rule (NFR-003).
-- [ ] Optional stretch (Could): Catch2 adapter in `tests/catch2/` and a CI matrix to prove the swap (TST-010).
+Built on branch `m5-hardening` (stacked on `m4-analysis`). All 61 Musts now have a passing test.
+
+- [x] ASan + UBSan: `SIM_SANITIZE` option and a CI job (NFR-007). Full suite clean locally; ASan and UBSan
+      each shown to catch planted bugs.
+- [x] `--require-coverage` on in CI (TST-011, SYS-005).
+- [x] Coverage report with pinned `gcovr` (NFR-008): lines 94.0 %, functions 100 %, branches 85.3 %. Reported, not gated.
+- [x] 30 s budget check (`tools/check_budget.py`) in CI (NFR-006). **Local margin is thin (about 25 s).**
+- [x] Hidden global state: the compiled library has exactly two constant writable symbols (NFR-003).
+- [x] The 12 Musts that had no test are closed (see architecture S-38); `req_trace.py` now fails clearly on bad input.
+- [x] Docs: SYS-006 banner added where it was missing.
+- [ ] **First GitHub run of the sanitizer and coverage jobs and of the new gate and budget steps.** All
+      were reproduced locally with the same flags; none has run on CI yet.
+- [ ] Not built (Could): the Catch2 adapter and CI matrix (TST-010). See architecture S-43.
+- [ ] Untested: one error path (a failed final write in `AtomicFile::commit`) needs fault injection.
+- [ ] Open the M5 pull request (stacked on #4) and merge after review.
 
 ## 7. M6: Release (DOC-001, DOC-002, VAL-01/05/06/07/08)
 
