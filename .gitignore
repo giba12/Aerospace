@@ -11,3 +11,6 @@ run.csv.tmp
 *.config.json
 *.json.tmp
 *.csv.tmp
+
+# Claude Code local state
+.claude/
