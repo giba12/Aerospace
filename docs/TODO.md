@@ -82,7 +82,7 @@ Built on branch `m4-analysis` (49 of 61 Musts covered overall).
 - [x] VAL-02 and VAL-03 recorded on the held-out seeds: `docs/VALIDATION.md`.
 - [x] S-HIGH-NOISE, S-SPARSE, S-WRONG-R measured (exploratory, tuning seeds). The baseline still lists them as
       [TBD]; update §5.2 if wanted. **S-SPARSE is a surprise:** coverage holds but the filter helps much less.
-- [ ] **Regenerate `docs/VALIDATION.md` from a clean commit** so its source revision is not `-dirty`.
+- [x] `docs/VALIDATION.md` held-out section regenerated from a clean commit (`731465de771b`); the numbers did not change.
 - [ ] Open the M4 pull request and merge after review.
 
 ## 6. M5: Hardening (NFR-001, 006..008, TST-010, TST-011)
