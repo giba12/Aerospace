@@ -1,5 +1,6 @@
 #pragma once
 
+#include "simulator/config.hpp"
 #include "simulator/state.hpp"
 
 namespace sim {
