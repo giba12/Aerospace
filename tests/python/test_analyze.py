@@ -4,11 +4,11 @@ import pytest
 import analyze
 
 
-def _row(step, true_pos, meas, est_pos, true_vel=10.0, est_vel=0.0):
+def _row(step, true_pos, meas, est_pos, true_vel=10.0, est_vel=0.0, est_var=0.0):
     return {"step": str(step), "t_s": "0", "true_pos_m": str(true_pos), "true_vel_mps": str(true_vel),
             "meas_pos_m": "" if meas is None else str(meas),
             "est_pos_m": str(est_pos), "est_vel_mps": str(est_vel),
-            "est_pos_var_m2": "0", "est_vel_var_m2s2": "0"}
+            "est_pos_var_m2": str(est_var), "est_vel_var_m2s2": "0"}
 
 
 @pytest.mark.req("ANA-002")
@@ -100,3 +100,30 @@ def test_good_file_still_reads(tmp_path):
     path = tmp_path / "good.csv"
     path.write_text(_csv_text(GOOD_LINE))
     assert analyze.compute_metrics(analyze.read_rows(path))["n_measurements"] == 1
+
+
+@pytest.mark.req("ANA-004")
+def test_two_sigma_coverage_on_a_known_input():
+    # Variance 4 means the filter reports a standard deviation of 2, so the +/-2 sigma bound is 4.
+    rows = [
+        _row(0, 0.0, 0.0, 3.0, est_var=4.0),    # error 3.0: inside
+        _row(1, 0.0, 0.0, -4.0, est_var=4.0),   # error 4.0: exactly on the bound counts as inside
+        _row(2, 0.0, 0.0, 4.5, est_var=4.0),    # error 4.5: outside
+        _row(3, 0.0, None, 99.0, est_var=4.0),  # no measurement: not part of the sample (ANA-002)
+    ]
+    m = analyze.compute_metrics(rows)
+    assert m["n_measurements"] == 3
+    assert m["n_within_2sigma"] == 2
+    assert m["frac_pos_within_2sigma"] == pytest.approx(2 / 3)
+
+
+@pytest.mark.req("ANA-004")
+def test_a_zero_variance_covers_only_a_zero_error():
+    rows = [_row(0, 5.0, 5.0, 5.0, est_var=0.0), _row(1, 5.0, 5.0, 5.0001, est_var=0.0)]
+    assert analyze.compute_metrics(rows)["n_within_2sigma"] == 1
+
+
+@pytest.mark.req("ANA-004", "ANA-001")
+def test_a_negative_variance_is_rejected_not_square_rooted():
+    with pytest.raises(analyze.CsvFormatError, match="est_pos_var_m2"):
+        analyze.compute_metrics([_row(0, 0.0, 0.0, 0.0, est_var=-1.0)])

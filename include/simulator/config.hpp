@@ -34,10 +34,27 @@ struct SensorConfig {
     void validate() const;
 };
 
+// Settings for the estimator: the filter's own beliefs, deliberately separate from the sensor's
+// true noise (CFG-003). `r_m2` is what the filter ASSUMES the sensor variance is; no default is
+// ever derived from `SensorConfig::sigma_m`, so a mismatch can be tested on purpose.
+// Defaults are the reference scenario (baseline 8.3).
+struct EstimatorConfig {
+    double q_m2ps3{0.1};          // process noise intensity: how much unmodelled jiggle to allow
+    double r_m2{25.0};            // assumed variance of one position reading
+    double p0_pos_m2{25.0};       // starting doubt about position
+    double p0_vel_m2ps2{100.0};   // starting doubt about velocity
+
+    // Throws std::invalid_argument naming the offending parameter (EST-010). The starting
+    // covariance is diagonal, so it is symmetric by construction and its determinant is the
+    // product of two non-negative numbers; checking each is enough.
+    void validate() const;
+};
+
 // Everything one run of `sim` needs.
 struct RunConfig {
     DynamicsConfig dynamics;
     SensorConfig sensor;
+    EstimatorConfig estimator;
     std::string out_path{"run.csv"};
 };
 

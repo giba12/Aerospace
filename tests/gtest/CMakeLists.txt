@@ -10,6 +10,8 @@ FetchContent_MakeAvailable(googletest)
 add_executable(sim_gtest_tests
   dynamics_tests.cpp
   estimator_tests.cpp
+  kalman_tests.cpp
+  mat2_tests.cpp
   interface_tests.cpp
   recorder_tests.cpp
   runner_tests.cpp

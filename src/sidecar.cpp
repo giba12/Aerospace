@@ -47,6 +47,7 @@ std::string sidecar_path(const std::string& out_path) {
 std::string sidecar_json(const RunConfig& cfg) {
     const DynamicsConfig& d = cfg.dynamics;
     const SensorConfig& s = cfg.sensor;
+    const EstimatorConfig& e = cfg.estimator;
 #ifdef SIM_SOURCE_REVISION
     const std::string revision = json_string(SIM_SOURCE_REVISION);
 #else
@@ -63,10 +64,10 @@ std::string sidecar_json(const RunConfig& cfg) {
         {"sigma_m", format_double(s.sigma_m, "sigma_m")},
         {"seed", std::to_string(s.seed)},
         {"sensor_id", json_string(s.sensor_id)},
-        {"est_q_m2ps3", "null"},
-        {"est_r_m2", "null"},
-        {"est_p0_pos_m2", "null"},
-        {"est_p0_vel_m2ps2", "null"},
+        {"est_q_m2ps3", format_double(e.q_m2ps3, "est_q_m2ps3")},
+        {"est_r_m2", format_double(e.r_m2, "est_r_m2")},
+        {"est_p0_pos_m2", format_double(e.p0_pos_m2, "est_p0_pos_m2")},
+        {"est_p0_vel_m2ps2", format_double(e.p0_vel_m2ps2, "est_p0_vel_m2ps2")},
         {"compiler", json_string(compiler_id())},
         {"source_revision", revision},
     };
