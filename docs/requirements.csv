@@ -1,4 +1,4 @@
-# Requirement registry for tools/trace.py (TST-011).
+# Requirement registry for tools/req_trace.py (TST-011).
 # Generated from docs/systems-engineering-baseline.md section 6.5 (RVCM), v0.1 draft, 2026-10-12.
 # Regenerate when requirements.md v0.2 is issued from the baseline. Columns: id,priority,method,level
 id,priority,method,level

@@ -20,7 +20,7 @@ include(GoogleTest)
 # Register every TEST individually so `ctest -N` lists them all (TST-003).
 gtest_discover_tests(sim_gtest_tests PROPERTIES LABELS "unit")
 
-# JUnit XML with the requirement tags, for tools/trace.py (TST-004, TST-011). This runs the
+# JUnit XML with the requirement tags, for tools/req_trace.py (TST-004, TST-011). This runs the
 # same suite once more in a single process. It costs well under a second and keeps the
 # per-test listing above.
 add_test(NAME junit.gtest
