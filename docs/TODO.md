@@ -1,7 +1,7 @@
 # To do
 
-Status as of 2026-11-05: **M0, M1 and M2 are merged into `master` on GitHub** (PRs #1 and #2, CI
-green on `master`). M3 onward is not started. Source for each item: [systems-engineering-baseline.md](systems-engineering-baseline.md)
+Status as of 2026-11-05: **M0 to M5 are merged into `master` on GitHub** (PRs #1 to #5, CI green).
+M6 (release) is in progress on branch `m6-release`. Source for each item: [systems-engineering-baseline.md](systems-engineering-baseline.md)
 (SEB-001), section numbers in brackets. Work top to bottom; do not start a milestone before the
 previous one meets its exit criteria (baseline 6.7).
 
@@ -15,14 +15,11 @@ Verified against GitHub on 2026-11-05.
 - [x] **Remote exists.** `origin` is `github.com/giba12/Aerospace` (private).
 - [x] **CI has run and is green** on GCC 13 and Clang 18, including on `master` after both merges.
 - [x] **VS Code CMake path fixed** (`${workspaceFolder}`, commit `3c0c024`, merged).
-- [x] **PR #1 (M1) and PR #2 (M2) merged** on 2026-11-05 with merge commits (`ab17482`, `e739e85`).
-- [x] **Local `master` rebased** onto the merged `origin/master`.
-- [ ] **Push local `master`.** It is ahead of `origin/master` by two unpushed commits: ignore
-      `.claude/` and this TODO update. Run `git push`.
-- [ ] **Clean up after the merges.** Delete the GitHub branches `m1-truth-acceleration`,
-      `m2-noisy-sensor` and `claude/aerospace-code-review-9741e9`, and remove the leftover worktree at
-      `.claude/worktrees/aerospace-code-review-9741e9` (`git worktree remove`), which still has
-      `m2-noisy-sensor` checked out.
+- [x] **PRs #1 to #5 (M1 to M5) merged** on 2026-11-05 with merge commits. GitHub returned transient HTTP 500s
+      when merging #4; retrying the REST call succeeded and nothing was half-merged. (`gh pr edit` fails on the
+      installed `gh` 2.45; retarget a PR with `gh api -X PATCH repos/OWNER/REPO/pulls/N -f base=master`.)
+- [x] **Local `master` is in sync with `origin/master`; the old worktree and the M1/M2/review branches are gone.**
+- [ ] **Delete the merged branches** `m3-estimator`, `m4-analysis` and `m5-hardening` on GitHub.
 - [ ] **Choose a `LICENSE`.** GitHub reports none and no branch contains one. Owner's choice (guide section 5).
 - [ ] **Confirm OI-01:** GoogleTest via `FetchContent`, pinned by SHA-256. It is implemented and CI is
       green; this is the formal sign-off (S-1 in `docs/architecture.md`).
@@ -66,7 +63,7 @@ Built on branch `m3-estimator`; all EST-001..013 have passing tests (48 of 61 Mu
 - [x] Disjoint tuning and held-out seed sets with an automated check (TST-012). EST-008 and EST-012 pass on the 50 held-out seeds.
 - [ ] **Decide CR-26** (`docs/change-requests/CR-26-oracle-tolerance.md`): exact oracle plus the size-scaled
       tolerance. The code already uses it; the baseline §6.3 row is unchanged until approved.
-- [ ] Open the M3 pull request and merge after review.
+- [x] M3 pull request merged (#3).
 
 ## 5. M4: Analysis (ANA-001..005)
 
@@ -83,7 +80,7 @@ Built on branch `m4-analysis` (49 of 61 Musts covered overall).
 - [x] S-HIGH-NOISE, S-SPARSE, S-WRONG-R measured (exploratory, tuning seeds). The baseline still lists them as
       [TBD]; update §5.2 if wanted. **S-SPARSE is a surprise:** coverage holds but the filter helps much less.
 - [x] `docs/VALIDATION.md` held-out section regenerated from a clean commit (`731465de771b`); the numbers did not change.
-- [ ] Open the M4 pull request and merge after review.
+- [x] M4 pull request merged (#4).
 
 ## 6. M5: Hardening (NFR-001, 006..008, TST-010, TST-011)
 
@@ -99,11 +96,11 @@ Built on branch `m5-hardening` (stacked on `m4-analysis`). All 61 Musts now have
 - [x] Hidden global state: the compiled library has exactly two constant writable symbols (NFR-003).
 - [x] The 12 Musts that had no test are closed (see architecture S-38); `req_trace.py` now fails clearly on bad input.
 - [x] Docs: SYS-006 banner added where it was missing.
-- [ ] **First GitHub run of the sanitizer and coverage jobs and of the new gate and budget steps.** All
-      were reproduced locally with the same flags; none has run on CI yet.
+- [x] First GitHub run of the sanitizer and coverage jobs and of the gate and budget steps: all four jobs
+      passed (budget 4.8 s GCC, 13.7 s Clang, of 30 s; coverage on CI: lines 94.5 %, branches 86.7 %).
 - [ ] Not built (Could): the Catch2 adapter and CI matrix (TST-010). See architecture S-43.
 - [ ] Untested: one error path (a failed final write in `AtomicFile::commit`) needs fault injection.
-- [ ] Open the M5 pull request (stacked on #4) and merge after review.
+- [x] M5 pull request merged (#5).
 
 ## 7. M6: Release (DOC-001, DOC-002, VAL-01/05/06/07/08)
 
@@ -112,8 +109,9 @@ Exit: README complete; validation recorded; baseline tagged.
 - [ ] Replace the README's "expected output" with real output and a real plot; update Limitations
       (it currently says the sensor is exact and the estimator is a passthrough).
 - [ ] Claim-to-evidence table (VAL-07): every claim in README or resume points to a test or run.
-- [ ] Clean-room run in a container (SYS-001 / VAL-01): Podman 4.9.3 is installed. Optional `Dockerfile`
-      only after the native path is reliable.
+- [x] `Dockerfile` and `.dockerignore` for a clean-room run (SYS-001 / VAL-01): the image builds from a fresh
+      copy, runs the whole test suite inside it, then runs the reference scenario. A CI `container` job builds
+      and runs it on every push. See architecture S-45 to S-50.
 - [ ] Update `docs/architecture.md` to match the final design (DOC-002).
 - [ ] Write the S-ACCEL-LARGE limitation: the filter fails at 0.5 m/s² (coverage 0.45).
 - [ ] Tag the baseline in git (NFR-010).

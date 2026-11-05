@@ -46,7 +46,8 @@ explicit Euler, which is exact when the acceleration is 0 and otherwise off by e
 ## Prerequisites
 
 Linux, GCC 13 or Clang 18, CMake ≥ 3.20, Ninja, Python 3.12 with `venv`, and network access on
-the first configure (GoogleTest is downloaded, pinned by SHA-256).
+the first configure (GoogleTest is downloaded, pinned by SHA-256). Or just Docker or Podman: see
+[In a container](#in-a-container-optional).
 
 ## Build, test, run, analyze
 
@@ -94,6 +95,43 @@ The sanitizer build takes about twice as long to run and the coverage build is u
 held to the 30 second budget. The two options cannot be combined.
 
 `./build/sim --help` lists every flag with its unit and default.
+
+### In a container (optional)
+
+A clean-room alternative to installing the toolchain: the image builds the program from a fresh copy of
+the source, installs the pinned Python packages, **runs the whole test suite inside the image**, and then
+runs the reference scenario. An image that exists is an image whose tests passed.
+
+```bash
+# Docker
+docker build -t sensor-sim .
+mkdir -p out && docker run --rm --user "$(id -u):$(id -g)" -v "$PWD/out:/out" sensor-sim
+
+# Podman (rootless). It needs a different flag: see the note below
+podman build -t sensor-sim .
+mkdir -p out && podman run --rm --userns=keep-id -v "$PWD/out:/out" sensor-sim
+```
+
+The run prints the metrics and the independent cross-check, and leaves `run.csv`,
+`run.csv.config.json`, `metrics.json` and `plot.png` in `./out`.
+
+**Why the two commands differ.** With rootless Podman, `--user` maps to a different host user from the one
+that owns `./out`, so the container cannot write there (`cannot open for writing`); `--userns=keep-id`
+keeps your own user. If your `docker` command is really Podman (as in this project's WSL setup, where it
+prints "Emulate Docker CLI using podman"), use the Podman line.
+
+- The build needs a network (apt, pip, and the GoogleTest download); the run does not.
+- `docker build --build-arg RUN_TESTS=0 -t sensor-sim .` skips the in-image tests for a quick demo.
+- The base image is pinned by digest, which bounds the compiler and CMake versions. The individual apt
+  packages are not pinned, so a rebuild months later can differ slightly.
+- The image runs as a non-root user and contains no secrets; `.dockerignore` keeps the git history and
+  local environments out of the build.
+- The build compiles GoogleTest and the project from scratch: expect several minutes (about 8 under rootless
+  Podman on the WSL machine this was developed on).
+- Checked once, on 2026-11-05 with Podman: the container's `run.csv` was byte-identical to a native run's, and
+  its `plot.png` and `metrics.json` to `data/example-plot.png` and `data/example-metrics.json`. That holds
+  because both used GCC 13.3 and the same standard library. The sidecar differs only in `source_revision`,
+  which is `null` in the image because it has no git history.
 
 ## Expected output
 
@@ -195,7 +233,7 @@ def test_header(...):
 
 ## Next steps
 
-M6 release (claim-to-evidence table, clean-room container run, tagging the baseline). The optional
+M6 release (claim-to-evidence table, the remaining validation records, tagging the baseline). The optional
 second test framework (Catch2, TST-010) was not built. See baseline section 6.7.
 
 ## Troubleshooting
