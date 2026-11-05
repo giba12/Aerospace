@@ -1,8 +1,25 @@
 #include "simulator/estimator.hpp"
 
+#include <cmath>
 #include <stdexcept>
 
 namespace sim {
+
+void EstimatorConfig::validate() const {
+    if (!std::isfinite(r_m2) || r_m2 <= 0.0) {
+        // R = 0 would make the gain divide by zero when the doubt is also zero.
+        throw std::invalid_argument("r_m2: must be finite and > 0");
+    }
+    if (!std::isfinite(q_m2ps3) || q_m2ps3 < 0.0) {
+        throw std::invalid_argument("q_m2ps3: must be finite and >= 0");
+    }
+    if (!std::isfinite(p0_pos_m2) || p0_pos_m2 < 0.0) {
+        throw std::invalid_argument("p0_pos_m2: must be finite and >= 0");
+    }
+    if (!std::isfinite(p0_vel_m2ps2) || p0_vel_m2ps2 < 0.0) {
+        throw std::invalid_argument("p0_vel_m2ps2: must be finite and >= 0");
+    }
+}
 
 bool PassthroughEstimator::initialized() const {
     return initialized_;
