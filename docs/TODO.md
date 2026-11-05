@@ -72,13 +72,18 @@ Built on branch `m3-estimator`; all EST-001..013 have passing tests (48 of 61 Mu
 
 Exit: ANA-001..005 verified; VAL-02 and VAL-03 recorded on held-out seeds.
 
-- [ ] Add pandas and matplotlib to `python/requirements.txt`, pinned.
-- [ ] Reject unknown `schema_version`; validate the sidecar (ANA-001).
-- [ ] Fraction of position errors within ±2σ of the reported std dev (ANA-004), `improvement_ratio`,
-      and `metrics.json` per baseline 8.7 (ANA-005).
-- [ ] Labeled plot: truth, measurements, estimate, with a PNG smoke test (ANA-003).
-- [ ] System tests EST-008 (ratio ≤ 0.75 on every held-out seed) and EST-012 (pooled coverage ≥ 0.90).
-- [ ] Record the validation scenarios: S-HIGH-NOISE, S-SPARSE, S-WRONG-R still have [TBD] results.
+Built on branch `m4-analysis` (49 of 61 Musts covered overall).
+
+- [x] matplotlib added to `python/requirements.txt`, pinned (pandas was not needed).
+- [x] Unknown `schema_version`, missing or mismatched sidecar rejected (ANA-001).
+- [x] ±2σ coverage (ANA-004), `improvement_ratio` and `metrics.json` per baseline 8.7 (ANA-005).
+- [x] Labelled three-panel plot with a PNG test (ANA-003); example in `data/`.
+- [x] EST-008 and EST-012 acceptance tests run through `python/ensemble.py` on the held-out seeds.
+- [x] VAL-02 and VAL-03 recorded on the held-out seeds: `docs/VALIDATION.md`.
+- [x] S-HIGH-NOISE, S-SPARSE, S-WRONG-R measured (exploratory, tuning seeds). The baseline still lists them as
+      [TBD]; update §5.2 if wanted. **S-SPARSE is a surprise:** coverage holds but the filter helps much less.
+- [x] `docs/VALIDATION.md` held-out section regenerated from a clean commit (`731465de771b`); the numbers did not change.
+- [ ] Open the M4 pull request and merge after review.
 
 ## 6. M5: Hardening (NFR-001, 006..008, TST-010, TST-011)
 
