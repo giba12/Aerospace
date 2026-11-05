@@ -26,6 +26,10 @@ def test_default_run_writes_header_and_n_plus_one_rows(run_sim, tmp_path):
     (["--bogus", "1"], "--bogus"),
     (["--steps"], "--steps"),
     (["--steps", "ten"], "--steps"),
+    (["--steps", "100001"], "steps"),
+    (["--steps", "-1"], "steps"),
+    (["--accel", "nan"], "accel_mps2"),
+    (["--accel", "fast"], "--accel"),
     (["--dt", "0"], "dt_s"),
     (["--meas-every", "0"], "every_n_steps"),
 ])
@@ -48,7 +52,7 @@ def test_unwritable_output_exits_1(run_sim):
 def test_help_lists_every_flag_with_its_unit_and_default(run_sim):
     result = run_sim("--help")
     assert result.returncode == 0
-    for flag in ("--steps", "--dt", "--x0", "--v0", "--meas-every", "--sensor-id", "--out"):
+    for flag in ("--steps", "--dt", "--x0", "--v0", "--accel", "--meas-every", "--sensor-id", "--out"):
         assert flag in result.stdout
 
 
@@ -62,3 +66,23 @@ def test_analysis_prints_rmse_for_a_fresh_run(run_sim, tmp_path):
     assert result.returncode == 0, result.stderr
     assert "rmse_meas_pos_m = " in result.stdout
     assert "rmse_est_pos_m = " in result.stdout
+
+
+@pytest.mark.req("SIM-004")
+def test_accel_flag_reproduces_vv_sim_01_through_the_binary(run_sim, tmp_path):
+    """VV-SIM-01 end to end: flag -> truth -> CSV. Euler gives 5995.0 m and 110.0 m/s."""
+    result = run_sim("--accel", "1", "--steps", "1000", "--out", "run.csv")
+    assert result.returncode == 0, result.stderr
+    rows = analyze.read_rows(tmp_path / "run.csv")
+    first, last = rows[0], rows[-1]
+    assert float(first["true_vel_mps"]) == 10.0  # step 0 is the initial state, untouched
+    assert float(last["true_pos_m"]) == pytest.approx(5995.0, abs=1e-9)
+    assert float(last["true_vel_mps"]) == pytest.approx(110.0, abs=1e-9)
+    assert float(last["t_s"]) == pytest.approx(100.0, abs=1e-9)
+
+
+@pytest.mark.req("SIM-004", "CFG-001")
+def test_accel_equals_form_and_negative_values_are_accepted(run_sim, tmp_path):
+    assert run_sim("--accel=-2.5", "--steps", "10", "--out", "run.csv").returncode == 0
+    rows = analyze.read_rows(tmp_path / "run.csv")
+    assert float(rows[-1]["true_vel_mps"]) == pytest.approx(10.0 - 2.5 * 1.0, abs=1e-9)

@@ -86,7 +86,7 @@ Priorities use MoSCoW: **M**ust, **S**hould, **C**ould. Each requirement is writ
 |---|---|---|---|
 | SIM-001 | M | Represent true state as position (m) and velocity (m/s) at time t (s). | Type exists; fields documented with units. |
 | SIM-002 | M | Advance state in fixed steps of `dt` > 0. Time for step k is computed as `t = k * dt`, **not** by repeatedly adding `dt`. | At k = 1000, dt = 0.1: `t` equals `100.0` within 1e-9 s. |
-| SIM-003 | M | With zero acceleration, propagation matches the analytic solution `x = x0 + v0·t`. | Within 1e-9 m after 1000 steps. |
+| SIM-003 | M | With zero acceleration, propagation matches the analytic solution `x = x0 + v0·t`. | Within the position tolerance of baseline §6.3 after any k ≤ N_max steps (CR-24); the reference check (k = 1000) tolerance is 1e-9 m. |
 | SIM-004 | S | Accept an optional constant known acceleration (m/s²). | Matches `x0 + v0·t + ½·a·t²` within a tolerance appropriate to the integrator (documented). |
 | SIM-005 | M | Run for a configured number of steps N and produce N+1 truth rows (including t = 0). | Row count check. |
 

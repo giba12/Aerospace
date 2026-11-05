@@ -6,6 +6,8 @@
 #include <functional>
 #include <iostream>
 #include <stdexcept>
+#include <string>
+#include <vector>
 
 #include "simulator/config.hpp"
 #include "simulator/estimator.hpp"
@@ -46,13 +48,13 @@ struct FlagSpec {
     const char* name;
     const char* unit;
     const char* default_text;
-    const char* help;
+    std::string help;
     std::function<void(RunConfig&, const std::string& flag, const std::string& value)> apply;
 };
 
 const std::vector<FlagSpec>& flags() {
     static const std::vector<FlagSpec> table = {
-        {"--steps", "steps", "1000", "number of time steps N (integer >= 0)",
+        {"--steps", "steps", "1000", "number of time steps N (integer, 0 to " + std::to_string(kMaxSteps) + ")",
          [](RunConfig& c, const std::string& f, const std::string& v) {
              c.dynamics.steps = parse_int(f, v);
          }},
@@ -71,6 +73,10 @@ const std::vector<FlagSpec>& flags() {
         {"--meas-every", "steps", "5", "sensor reports every M steps (integer >= 1)",
          [](RunConfig& c, const std::string& f, const std::string& v) {
              c.sensor.every_n_steps = parse_int(f, v);
+         }},
+        {"--accel", "m/s^2", "0", "constant acceleration (finite)",
+         [](RunConfig& c, const std::string& f, const std::string& v) {
+             c.dynamics.accel_mps2 = parse_double(f, v);
          }},
         {"--sensor-id", "-", "pos0", "sensor name (non-empty, no commas)",
          [](RunConfig& c, const std::string&, const std::string& v) { c.sensor.sensor_id = v; }},

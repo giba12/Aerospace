@@ -1,9 +1,9 @@
-"""Unit tests for tools/trace.py (TST-011 verification: a fixture with a missing/unknown ID)."""
+"""Unit tests for tools/req_trace.py (TST-011 verification: a fixture with a missing/unknown ID)."""
 import textwrap
 
 import pytest
 
-import trace as trace_tool  # tools/trace.py; imported by name via pytest.ini pythonpath
+import req_trace as trace_tool  # tools/req_trace.py; imported by name via pytest.ini pythonpath
 
 REGISTRY = textwrap.dedent("""\
     # comment line

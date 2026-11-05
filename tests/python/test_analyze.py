@@ -38,3 +38,65 @@ def test_wrong_header_is_rejected(tmp_path):
     bad.write_text("step,t_s\n0,0\n")
     with pytest.raises(analyze.CsvFormatError):
         analyze.read_rows(bad)
+
+
+def _csv_text(*data_lines):
+    return ",".join(analyze.EXPECTED_HEADER) + "\n" + "".join(line + "\n" for line in data_lines)
+
+
+GOOD_LINE = "0,0,1,10,1,1,0,0,0"
+
+
+@pytest.mark.req("ANA-001", "ANA-002")
+@pytest.mark.parametrize("column, bad, fragment", [
+    ("true_pos_m", "abc", "not a number"),
+    ("meas_pos_m", "1.2.3", "not a number"),
+    ("est_pos_m", "", "missing"),
+    ("est_vel_mps", "   ", "missing"),
+    ("true_vel_mps", "nan", "not finite"),
+    ("est_pos_m", "inf", "not finite"),
+])
+def test_bad_numeric_cell_is_a_clean_error_naming_row_and_column(column, bad, fragment):
+    row = _row(7, 1.0, 1.0, 1.0)
+    row[column] = bad
+    with pytest.raises(analyze.CsvFormatError) as e:
+        analyze.compute_metrics([_row(0, 0.0, 0.0, 0.0), row])
+    message = str(e.value)
+    assert fragment in message
+    assert column in message
+    assert "data row 1" in message and "step '7'" in message
+
+
+@pytest.mark.req("ANA-001")
+@pytest.mark.parametrize("line", ["0,0,1,10", GOOD_LINE + ",extra"])
+def test_row_with_wrong_field_count_is_rejected(tmp_path, line):
+    path = tmp_path / "ragged.csv"
+    path.write_text(_csv_text(GOOD_LINE, line))
+    with pytest.raises(analyze.CsvFormatError, match="line 3"):
+        analyze.read_rows(path)
+
+
+@pytest.mark.req("ANA-001")
+def test_non_text_file_is_rejected_not_a_traceback(tmp_path):
+    path = tmp_path / "binary.csv"
+    path.write_bytes(b"\xff\xfe\x00\x80")
+    with pytest.raises(analyze.CsvFormatError):
+        analyze.read_rows(path)
+
+
+@pytest.mark.req("ANA-001", "ANA-002")
+def test_cli_reports_bad_cell_on_stderr_with_exit_1(tmp_path, capsys):
+    path = tmp_path / "bad_cell.csv"
+    path.write_text(_csv_text("0,0,abc,10,1,1,0,0,0"))
+    assert analyze.main([str(path)]) == 1
+    captured = capsys.readouterr()
+    assert captured.err.startswith("analyze: error: ")
+    assert "true_pos_m" in captured.err
+    assert captured.out == ""
+
+
+@pytest.mark.req("ANA-001")
+def test_good_file_still_reads(tmp_path):
+    path = tmp_path / "good.csv"
+    path.write_text(_csv_text(GOOD_LINE))
+    assert analyze.compute_metrics(analyze.read_rows(path))["n_measurements"] == 1
