@@ -59,3 +59,24 @@ def test_pytest_style_property_child_is_read(tmp_path):
     cases = ('<testcase classname="S" name="a"><properties>'
              '<property name="requirements" value="AAA-001,AAA-002"/></properties></testcase>')
     assert _run(tmp_path, cases, "--require-coverage") == 0
+
+
+@pytest.mark.req("TST-004", "TST-011")
+def test_a_missing_or_unparseable_junit_file_fails_the_gate_with_a_clear_message(tmp_path, capsys):
+    reg = tmp_path / "reg.csv"
+    reg.write_text(REGISTRY)
+    assert trace_tool.main(["--requirements", str(reg), "--junit", str(tmp_path / "nope.xml")]) == 1
+    assert "cannot read an input file" in capsys.readouterr().err
+    bad = tmp_path / "bad.xml"
+    bad.write_text("<not xml")
+    assert trace_tool.main(["--requirements", str(reg), "--junit", str(bad)]) == 1
+
+
+@pytest.mark.req("TST-004", "TST-011")
+def test_junit_files_with_no_tests_fail_the_gate_instead_of_passing_vacuously(tmp_path, capsys):
+    reg = tmp_path / "reg.csv"
+    reg.write_text(REGISTRY)
+    empty = tmp_path / "empty.xml"
+    empty.write_text("<testsuites><testsuite/></testsuites>")
+    assert trace_tool.main(["--requirements", str(reg), "--junit", str(empty)]) == 1
+    assert "no tests at all" in capsys.readouterr().err

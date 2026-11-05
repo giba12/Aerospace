@@ -40,6 +40,12 @@ jobs:
       - name: Test
         run: cd build && ctest --output-on-failure
 
+      # NFR-006: the whole suite, ensembles included, must stay inside 30 seconds.
+      - name: Time budget
+        run: >
+          .venv/bin/python tools/check_budget.py --limit 30
+          --junit build/test-reports/gtest.xml build/test-reports/pytest.xml
+
       # The README's step 4: run the simulator and analyze it, so the plot and metrics.json are
       # produced on every push and uploaded below.
       - name: Example run and analysis
@@ -48,13 +54,13 @@ jobs:
           .venv/bin/python python/analyze.py build/test-reports/run.csv \
             --metrics-json build/test-reports/metrics.json --plot build/test-reports/plot.png
 
-      # The gate checks unknown IDs and orphan tests now. `--require-coverage` is added in
-      # milestone M5 (baseline 6.7), when every Must requirement is expected to have a test.
+      # TST-011, SYS-005: the gate. It fails the build if a test cites an unknown requirement, a test
+      # cites none, or ANY Must requirement has no passing test.
       - name: Traceability
         run: >
           .venv/bin/python tools/req_trace.py --requirements docs/requirements.csv
           --junit build/test-reports/gtest.xml build/test-reports/pytest.xml
-          --matrix-out build/test-reports/traceability.md
+          --matrix-out build/test-reports/traceability.md --require-coverage
 
       - name: Upload reports
         if: always()
@@ -62,3 +68,68 @@ jobs:
         with:
           name: reports-${{ matrix.compiler }}
           path: build/test-reports/
+
+  # NFR-007: the whole suite under AddressSanitizer and UndefinedBehaviorSanitizer. Any finding aborts
+  # the process, so it fails the job. Not held to the 30 s budget: sanitized code is slower by design.
+  sanitizers:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build python3-venv g++-13
+
+      - name: Python environment (pinned)
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -r python/requirements.txt
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_CXX_COMPILER=g++-13 -DSIM_SANITIZE=ON
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        env:
+          UBSAN_OPTIONS: print_stacktrace=1
+        run: cd build && ctest --output-on-failure
+
+  # NFR-008: line and branch coverage of src/ and include/. The goal is 90 % of lines, REPORTED here
+  # and never a gate (the baseline says so). GCC 13 has no condition coverage (risk R-08).
+  coverage:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build python3-venv g++-13
+
+      - name: Python environment (pinned)
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -r python/requirements.txt
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_CXX_COMPILER=g++-13 -DSIM_COVERAGE=ON -DSIM_GCOV=gcov-13
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        run: cd build && ctest --output-on-failure
+
+      - name: Coverage report
+        run: |
+          cmake --build build --target coverage
+          { echo '### Coverage of src/ and include/'; echo '```'; cat build/coverage/summary.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v6
+        with:
+          name: coverage
+          path: build/coverage/

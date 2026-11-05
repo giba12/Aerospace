@@ -82,8 +82,17 @@ def main(argv=None):
                    help="fail if any Must requirement has no passing test (gate on in M5)")
     args = p.parse_args(argv)
 
-    registry = load_registry(args.requirements)
-    errors, coverage = analyze(registry, load_tests(args.junit))
+    # A missing or unreadable input must fail the gate loudly and clearly, never pass it (TST-004).
+    try:
+        registry = load_registry(args.requirements)
+        tests = load_tests(args.junit)
+    except (OSError, ET.ParseError, csv.Error, KeyError) as e:
+        print(f"trace: error: cannot read an input file: {e!r}", file=sys.stderr)
+        return 1
+    if not tests:
+        print("trace: error: the JUnit files contain no tests at all", file=sys.stderr)
+        return 1
+    errors, coverage = analyze(registry, tests)
 
     musts = [r for r, pri in registry.items() if pri == "M"]
     gaps = [r for r in musts if r not in coverage]
