@@ -155,6 +155,47 @@ def test_every_system_test_file_drives_the_built_program_and_ctest_supplies_it()
     assert "SIM_BIN=$<TARGET_FILE:sim>" in text("tests/CMakeLists.txt")
 
 
+# ---- SYS-001: the clean-room container ----
+
+@pytest.mark.req("SYS-001", "NFR-009")
+def test_the_dockerfile_pins_its_base_image_by_digest():
+    assert re.search(r"^FROM \S+@sha256:[0-9a-f]{64}$", text("Dockerfile"), re.M)
+
+
+@pytest.mark.req("SYS-001")
+def test_the_dockerfile_follows_the_readme_steps_and_runs_the_whole_test_suite():
+    docker = text("Dockerfile")
+    for step in ("pip install --no-cache-dir -r python/requirements.txt", "cmake -S . -B build -G Ninja",
+                 "cmake --build build", "ctest --output-on-failure"):
+        assert step in docker, f"the Dockerfile does not run: {step}"
+    assert "ARG RUN_TESTS=1" in docker, "the tests must run by default"
+    for step in ("./build/sim", "python/analyze.py", "python/kalman_oracle.py"):
+        assert step in docker, f"the container's default run lacks: {step}"
+    readme = text("README.md")
+    assert "docker build -t sensor-sim ." in readme and "podman build -t sensor-sim ." in readme
+    # rootless Podman cannot write to the mounted directory without this flag (found by running it)
+    assert "--userns=keep-id" in readme and "--userns=keep-id" in docker
+
+
+@pytest.mark.req("SYS-001")
+def test_the_image_runs_as_a_non_root_user_and_holds_no_secrets_or_local_state():
+    docker = text("Dockerfile")
+    assert re.search(r"^USER ubuntu$", docker, re.M), "the image must not run as root"
+    for line in docker.splitlines():
+        if re.match(r"\s*(ENV|ARG)\b", line):
+            assert not re.search(r"KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL", line, re.I), f"secret-like name: {line}"
+    ignored = text(".dockerignore").split()
+    for entry in (".git", ".venv", "build", ".claude"):
+        assert entry in ignored, f".dockerignore must exclude {entry}"
+
+
+@pytest.mark.req("SYS-001")
+def test_ci_builds_and_runs_the_container_on_every_push():
+    ci = text(".github/workflows/ci.yml")
+    assert "docker build -t sensor-sim ." in ci
+    assert 'docker run --rm --user "$(id -u):$(id -g)"' in ci
+
+
 # ---- SYS-006, DOC-001: the documentation says what this is ----
 
 DISCLAIMED_DOCS = ["README.md", "docs/architecture.md", "docs/VALIDATION.md", "docs/FILE_MAP.md",
