@@ -4,10 +4,11 @@
 > qualified for any use. It does not model a real sensor, real vehicle dynamics, or
 > operational sensor fusion. (SYS-006)
 
-**Status: M3 in progress (Kalman filter built).** Every stage of the pipeline exists and runs.
-The truth model, the seeded noisy sensor and the Kalman filter are real. The held-out-seed
-performance tests (EST-008, EST-012), the independent Python cross-check, and the plot are still to
-come. See [Limitations](#limitations).
+**Status: M3 complete (Kalman filter built and verified).** Every stage of the pipeline exists and
+runs. The truth model, the seeded noisy sensor and the Kalman filter are real. The filter is checked
+three ways: against the baseline's hand-worked vector, against an independent Python
+re-computation in exact arithmetic, and against 50 held-out random seeds. The plot and the
+metrics file are still to come (M4). See [Limitations](#limitations).
 
 ## What this project demonstrates
 
@@ -62,7 +63,10 @@ cd build && ctest --output-on-failure && cd ..
 ./build/sim --steps 1000 --out run.csv     # also writes run.csv.config.json (settings, seed, build)
 .venv/bin/python python/analyze.py run.csv
 
-# 5. Check requirement traceability
+# 5. Cross-check the filter against the independent Python re-computation (exact arithmetic)
+.venv/bin/python python/kalman_oracle.py run.csv
+
+# 6. Check requirement traceability
 .venv/bin/python tools/req_trace.py --requirements docs/requirements.csv \
     --junit build/test-reports/gtest.xml build/test-reports/pytest.xml
 ```
@@ -82,10 +86,17 @@ n_measurements = 201
 rmse_meas_pos_m = 5.4598541120696265
 rmse_est_pos_m = 2.32142058992441
 rmse_est_vel_mps = 1.2027805245829981
+n_within_2sigma = 189
+frac_pos_within_2sigma = 0.9402985074626866
 ```
 
-This is one seed. The claim that the filter beats the sensor on seeds it was not tuned on (EST-008)
-is tested separately and is not yet built.
+`frac_pos_within_2sigma` is the share of those 201 positions whose error is inside twice the filter's
+own reported standard deviation (94 % for this seed).
+
+This is one seed. Across 50 held-out seeds (never used to choose any setting) the estimate's RMSE is
+0.31 to 0.56 times the raw readings' RMSE, against a required 0.75 (EST-008), and 97.6 % of the
+true positions fall inside the filter's own +/-2 sigma error bars, against a required 90 %
+(EST-012). A perfect filter scores about 95 %.
 
 The noise values come from the C++ standard library's `std::normal_distribution`, which the
 standard leaves implementation-defined. The same seed gives identical output on the same platform
@@ -124,21 +135,22 @@ def test_header(...):
 
 ## Limitations
 
-- The filter assumes constant velocity. If the truth accelerates (`--accel`), it is wrong in a way
-  the position RMSE barely shows; the baseline's prototype measured the true value inside the
-  filter's own error bars only 45 % of the time at 0.5 m/s^2 (scenario S-ACCEL-LARGE). That
-  check (EST-012) is not built yet.
-- There is no plot yet (M4), and the held-out-seed performance tests and the independent Python
-  cross-check of the filter are still to come (rest of M3).
+- The filter assumes constant velocity, so it fails when the truth accelerates. Measured on 200 tuning
+  seeds with the real filter: at `--accel 0.1` it still helps (RMSE ratio 0.46, error-bar coverage
+  96 %); at `--accel 0.5` it is no better than the raw readings (ratio 1.05) and the true position
+  is inside its own error bars only 42 % of the time. The acceptance tests (EST-008, EST-012) use
+  the reference scenario with no acceleration and say nothing about this case.
+- The filter's `R` and `q` are not tuned for any scenario other than the reference one.
+- There is no plot yet (M4).
 - Sensor noise is reproducible only on the same platform and build (see Expected output).
 - One dimension. Acceleration, if any, is constant and known; Euler's error bound is `a·t·dt/2`.
-- 18 of 61 Must requirements have no passing test yet. `req_trace.py` prints the list; the
+- 13 of 61 Must requirements have no passing test yet. `req_trace.py` prints the list; the
   coverage gate (`--require-coverage`) is switched on in M5.
 - CI runs on every push (GCC 13 and Clang 18) and has passed on the pushed branches.
 
 ## Next steps
 
-Finish M3 (held-out-seed tests EST-008 and EST-012, and the Python cross-check), M4 analysis plot and coverage metrics, M5
+M4 analysis plot and metrics file, M5
 sanitizers and the coverage gate. See baseline section 6.7.
 
 ## Troubleshooting

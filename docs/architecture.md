@@ -15,7 +15,9 @@ the choices made while building the skeleton (DOC-002). Update it whenever eithe
 | `CsvRecorder` | Real: exact header, 17 digits, empty = missing, atomic rename |
 | CLI | Real subset: the fourteen flags in use (`--accel` added in M1; `--sigma`, `--seed` in M2; `--est-q`, `--est-r`, `--est-p0-pos`, `--est-p0-vel` in M3), exit codes 0/1/2 |
 | Sidecar JSON (IF-08) | Real: `<out>.config.json`, 16 flat keys, schema_version 1; since M3 the four estimator keys hold the filter's settings |
-| `analyze.py` | Header check and RMSE. Plot, coverage, metrics JSON are M4 |
+| `analyze.py` | Header check, RMSE and the +/-2 sigma coverage (ANA-004). Plot and metrics JSON are M4 |
+| `kalman_oracle.py` | Independent re-computation of the `est_*` columns in 60-digit decimal arithmetic (VAL-04, DD-012) |
+| `tests/seed_sets.py` | The tuning and held-out seed sets (TST-012) |
 
 ## Decisions made while scaffolding
 
@@ -46,6 +48,10 @@ the choices made while building the skeleton (DOC-002). Update it whenever eithe
 | S-23 | `PassthroughEstimator` was removed, not kept | Keep it as a baseline for comparison | Baseline 7.5 describes the raw sensor as the comparison; keeping dead code that tests no longer use invites confusion |
 | S-24 | The `--est-*` flags and real sidecar values arrive together with the filter (M3) | Add them in M2 (rejected in CR-25) | Honours S-19: no flag exists that something ignores. Closes the `null` placeholder from CR-25 |
 | S-25 | A reading older than the last accepted one is rejected; an equal timestamp is accepted. The "last reading" time is tracked separately from the filter's own clock | Compare against the filter clock | The filter clock is advanced by `+= dt` and drifts by rounding from the runner's `k * dt` timestamps; comparing against it would reject valid readings |
+| S-26 | The independent oracle computes in 60-digit `decimal` arithmetic on the exact values of the doubles the C++ got, with a different formulation (scalar, expanded predict, short update form) | An oracle in doubles; a port of the C++ | A double-precision oracle was itself wrong after 100,000 steps without a reading (error 4.9e-7 against 9e-16 for the C++ Joseph form). An oracle must be more accurate than what it checks. Costs 6 to 8 s for a 100,000-step run, so the tests use at most 20,000 steps. CR-26 |
+| S-27 | Oracle tolerance is `max(1e-9, 2·k·u·|value|)`, the CR-24 form. **Proposed, not yet approved**; the baseline row is unchanged | Fixed 1e-9 | A fixed value is below the spacing of doubles for large variances. Worst case uses 23 % of the allowance. CR-26 |
+| S-28 | Two disjoint seed sets live in `tests/seed_sets.py` (200 tuning, 50 held-out). The acceptance tests import only the held-out set, and a test checks both that and the disjointness | One seed list; a convention | Makes "performs well on unseen data" mechanically checkable (TST-012, CR-06, R-05). Thresholds (0.75, 0.90) were re-measured on the tuning set only: ratio 0.317 to 0.576, pooled coverage 0.975 |
+| S-29 | `analyze.py` returns `n_within_2sigma` as well as the fraction | The fraction only | Pooled coverage across seeds needs the counts, not an average of fractions (EST-012) |
 
 ## Not decided here
 
