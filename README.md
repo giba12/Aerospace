@@ -185,8 +185,8 @@ def test_header(...):
   inspection* of the build files, the CI workflow and the documents (`tests/python/test_configuration_rules.py`),
   as the baseline's verification matrix plans. They stop that configuration drifting; they are not behaviour
   tests. That CI really builds with both compilers on every push is shown by CI's own history.
-- Coverage: 94.0 % of lines (343 of 365), 100 % of functions, 85.3 % of branches with compiler-generated
-  exception edges excluded (59.6 % with them). The uncovered lines are mostly `std::function` bookkeeping in
+- Coverage: about 94 % of lines (94.0 % on the development machine, 94.5 % on CI), 100 % of functions, and
+  85 to 87 % of branches with compiler-generated exception edges excluded (59.6 % locally with them). The uncovered lines are mostly `std::function` bookkeeping in
   the flag table, plus one error path (a failed final write) that needs fault injection to reach. GCC 13
   cannot report condition coverage. The 90 % line goal is reported, never a gate.
 - The 30 second budget is checked on every normal CI build. On the slow WSL machine this was developed on
