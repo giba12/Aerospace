@@ -33,10 +33,18 @@ def _gtest_names(build_dir):
     return binary, names
 
 
+def _generator(build_dir):
+    """The CMake generator of the real build, so this test needs no tool the build itself does not.
+    (Naming none made CMake default to Makefiles and fail in a container that has only Ninja.)"""
+    match = re.search(r"^CMAKE_GENERATOR:INTERNAL=(.+)$", (build_dir / "CMakeCache.txt").read_text(), re.M)
+    assert match, "CMakeCache.txt names no generator"
+    return match.group(1)
+
+
 @pytest.mark.req("TST-002")
-def test_an_unknown_test_framework_is_refused_at_configure_time(tmp_path):
-    done = subprocess.run(["cmake", "-S", str(ROOT), "-B", str(tmp_path / "b"), "-DSIM_TEST_FRAMEWORK=bogus"],
-                          capture_output=True, text=True)
+def test_an_unknown_test_framework_is_refused_at_configure_time(build_dir, tmp_path):
+    done = subprocess.run(["cmake", "-S", str(ROOT), "-B", str(tmp_path / "b"), "-G", _generator(build_dir),
+                           "-DSIM_TEST_FRAMEWORK=bogus"], capture_output=True, text=True)
     assert done.returncode != 0
     assert "SIM_TEST_FRAMEWORK='bogus' has no adapter in tests/bogus/" in done.stderr
 
