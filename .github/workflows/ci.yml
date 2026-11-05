@@ -133,3 +133,27 @@ jobs:
         with:
           name: coverage
           path: build/coverage/
+
+  # SYS-001 / VAL-01: a clean-room run. Building the image compiles the program from a fresh copy of
+  # the source, installs the pinned Python packages and runs the whole test suite inside it, so the
+  # build fails if any test does. Then the image is run once, exactly as the README says.
+  container:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build the image (runs the whole test suite inside it)
+        run: docker build -t sensor-sim .
+
+      - name: Run the reference scenario in the container
+        run: |
+          mkdir out
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD/out:/out" sensor-sim
+          test -s out/run.csv && test -s out/run.csv.config.json && test -s out/metrics.json && test -s out/plot.png
+          python3 -c "import json; m = json.load(open('out/metrics.json')); r = m['improvement_ratio']; print('improvement_ratio', r); assert 0 < r < 0.75"
+
+      - name: Upload container outputs
+        uses: actions/upload-artifact@v6
+        with:
+          name: container-output
+          path: out/

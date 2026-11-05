@@ -1,0 +1,14 @@
+# Keep the image build context to the source: no history, no local environments, no build output.
+.git
+.gitignore
+.claude
+.vscode
+.venv
+build
+build-*
+__pycache__
+.pytest_cache
+*.pyc
+run.csv
+run.csv.config.json
+out
