@@ -1,6 +1,16 @@
-# Pinned (NFR-009). Direct dependency: pytest. The rest are its transitive pins.
-# Add pandas/matplotlib here (pinned) in the milestone that first imports them (M4).
+# Pinned (NFR-009). Direct dependencies: pytest (tests) and matplotlib (the plot, ANA-003).
+# Everything else is a transitive pin of those two, from `pip freeze`.
+contourpy==1.4.0
+cycler==0.12.1
+fonttools==4.68.0
 iniconfig==2.3.1
+kiwisolver==1.5.1
+matplotlib==3.10.8
+numpy==2.5.4
 packaging==26.3
+pillow==13.0.0
 pluggy==1.6.0
+pyparsing==3.3.3
 pytest==8.3.4
+python-dateutil==4.0.0
+tzdata==2026.6

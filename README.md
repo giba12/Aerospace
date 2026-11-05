@@ -4,11 +4,12 @@
 > qualified for any use. It does not model a real sensor, real vehicle dynamics, or
 > operational sensor fusion. (SYS-006)
 
-**Status: M3 complete (Kalman filter built and verified).** Every stage of the pipeline exists and
+**Status: M4 complete (analysis and validation record).** Every stage of the pipeline exists and
 runs. The truth model, the seeded noisy sensor and the Kalman filter are real. The filter is checked
 three ways: against the baseline's hand-worked vector, against an independent Python
-re-computation in exact arithmetic, and against 50 held-out random seeds. The plot and the
-metrics file are still to come (M4). See [Limitations](#limitations).
+re-computation in exact arithmetic, and against 50 held-out random seeds (the result is recorded in
+[docs/VALIDATION.md](docs/VALIDATION.md)). `analyze.py` prints the metrics, writes `metrics.json`
+and draws the plot below. See [Limitations](#limitations).
 
 ## What this project demonstrates
 
@@ -59,9 +60,9 @@ cmake --build build
 # 3. Test (C++ unit tests, Python system tests; JUnit XML goes to build/test-reports/)
 cd build && ctest --output-on-failure && cd ..
 
-# 4. Run the simulator, then analyze its output
+# 4. Run the simulator, then analyze its output (needs run.csv.config.json next to the CSV)
 ./build/sim --steps 1000 --out run.csv     # also writes run.csv.config.json (settings, seed, build)
-.venv/bin/python python/analyze.py run.csv
+.venv/bin/python python/analyze.py run.csv --metrics-json metrics.json --plot plot.png
 
 # 5. Cross-check the filter against the independent Python re-computation (exact arithmetic)
 .venv/bin/python python/kalman_oracle.py run.csv
@@ -103,7 +104,18 @@ standard leaves implementation-defined. The same seed gives identical output on 
 and build; the digits above are from GCC 13.3 and other toolchains will print different noise.
 `--sigma 0` gives an exact sensor, and the sidecar `run.csv.config.json` records every setting.
 
-A real plot and sample output arrive in M4.
+The plot (`data/example-plot.png`, from the command in step 4) shows the three things worth seeing. Top:
+the truth, the noisy readings and the filter's estimate. Middle: the position *error* of the estimate
+against the raw readings' error, with the filter's own +/-2 sigma bars shaded; the blue error stays inside
+the band and hugs zero while the orange readings scatter wider. Bottom: the velocity, which the sensor never
+measures, converging on the true 10 m/s within about six seconds.
+
+![truth, sensor readings and filter estimate](data/example-plot.png)
+
+`analyze.py` refuses a CSV whose sidecar is missing, has a `schema_version` it does not understand, or
+describes a different run (ANA-001); it writes `metrics.json` in the layout of baseline section 8.7
+(`improvement_ratio` is `null` for an exact sensor, where the raw error is 0). An example is
+`data/example-metrics.json`.
 
 ## Repository layout
 
@@ -113,9 +125,10 @@ A real plot and sample output arrive in M4.
 | `tests/support/` | Framework-neutral test helpers and fakes |
 | `tests/gtest/` | GoogleTest adapter. The only place that knows the framework |
 | `tests/system/`, `tests/python/` | pytest: black-box tests of `sim`, and unit tests of the Python tools |
-| `python/` | `analyze.py` and the pinned `requirements.txt` |
+| `python/` | `analyze.py` (metrics, JSON, plot), `kalman_oracle.py` (independent re-computation), `ensemble.py` (runs many seeds, VAL-02/03), `seed_sets.py`, and the pinned `requirements.txt` |
+| `data/` | A small example plot and metrics file |
 | `tools/req_trace.py` | Requirement-to-test traceability and its CI gate |
-| `docs/` | Requirements, baseline, architecture, and `requirements.csv` (the ID registry) |
+| `docs/` | Requirements, baseline, architecture, `VALIDATION.md` (the VAL-02/03 record), change requests, and `requirements.csv` (the ID registry) |
 
 ## Writing a test
 
@@ -141,17 +154,19 @@ def test_header(...):
   is inside its own error bars only 42 % of the time. The acceptance tests (EST-008, EST-012) use
   the reference scenario with no acceleration and say nothing about this case.
 - The filter's `R` and `q` are not tuned for any scenario other than the reference one.
-- There is no plot yet (M4).
 - Sensor noise is reproducible only on the same platform and build (see Expected output).
 - One dimension. Acceleration, if any, is constant and known; Euler's error bound is `a·t·dt/2`.
-- 13 of 61 Must requirements have no passing test yet. `req_trace.py` prints the list; the
+- Validation is on simulated data from the model the filter assumes, and the exact figures depend on the
+  C++ standard library's normal distribution. See `docs/VALIDATION.md` for what it does and does not show,
+  including a scenario (a reading only every 5 s) where the filter helps much less than in the reference one.
+- 12 of 61 Must requirements have no passing test yet. `req_trace.py` prints the list; the
   coverage gate (`--require-coverage`) is switched on in M5.
 - CI runs on every push (GCC 13 and Clang 18) and has passed on the pushed branches.
 
 ## Next steps
 
-M4 analysis plot and metrics file, M5
-sanitizers and the coverage gate. See baseline section 6.7.
+M5 hardening (sanitizers, the coverage gate, coverage report) and M6 release (claim-to-evidence table,
+clean-room container run, tagging the baseline). See baseline section 6.7.
 
 ## Troubleshooting
 

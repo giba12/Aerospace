@@ -15,9 +15,10 @@ the choices made while building the skeleton (DOC-002). Update it whenever eithe
 | `CsvRecorder` | Real: exact header, 17 digits, empty = missing, atomic rename |
 | CLI | Real subset: the fourteen flags in use (`--accel` added in M1; `--sigma`, `--seed` in M2; `--est-q`, `--est-r`, `--est-p0-pos`, `--est-p0-vel` in M3), exit codes 0/1/2 |
 | Sidecar JSON (IF-08) | Real: `<out>.config.json`, 16 flat keys, schema_version 1; since M3 the four estimator keys hold the filter's settings |
-| `analyze.py` | Header check, RMSE and the +/-2 sigma coverage (ANA-004). Plot and metrics JSON are M4 |
+| `analyze.py` | Header and sidecar checks incl. `schema_version` (ANA-001), RMSE, +/-2 sigma coverage, `metrics.json` (baseline 8.7), and the labelled three-panel plot |
 | `kalman_oracle.py` | Independent re-computation of the `est_*` columns in 60-digit decimal arithmetic (VAL-04, DD-012) |
-| `tests/seed_sets.py` | The tuning and held-out seed sets (TST-012) |
+| `seed_sets.py` (in `python/`) | The tuning and held-out seed sets (TST-012) |
+| `ensemble.py` | Runs `sim` over a seed set and reports VAL-02 and VAL-03; used by the acceptance tests and by `docs/VALIDATION.md` |
 
 ## Decisions made while scaffolding
 
@@ -50,8 +51,14 @@ the choices made while building the skeleton (DOC-002). Update it whenever eithe
 | S-25 | A reading older than the last accepted one is rejected; an equal timestamp is accepted. The "last reading" time is tracked separately from the filter's own clock | Compare against the filter clock | The filter clock is advanced by `+= dt` and drifts by rounding from the runner's `k * dt` timestamps; comparing against it would reject valid readings |
 | S-26 | The independent oracle computes in 60-digit `decimal` arithmetic on the exact values of the doubles the C++ got, with a different formulation (scalar, expanded predict, short update form) | An oracle in doubles; a port of the C++ | A double-precision oracle was itself wrong after 100,000 steps without a reading (error 4.9e-7 against 9e-16 for the C++ Joseph form). An oracle must be more accurate than what it checks. Costs 6 to 8 s for a 100,000-step run, so the tests use at most 20,000 steps. CR-26 |
 | S-27 | Oracle tolerance is `max(1e-9, 2·k·u·|value|)`, the CR-24 form. **Proposed, not yet approved**; the baseline row is unchanged | Fixed 1e-9 | A fixed value is below the spacing of doubles for large variances. Worst case uses 23 % of the allowance. CR-26 |
-| S-28 | Two disjoint seed sets live in `tests/seed_sets.py` (200 tuning, 50 held-out). The acceptance tests import only the held-out set, and a test checks both that and the disjointness | One seed list; a convention | Makes "performs well on unseen data" mechanically checkable (TST-012, CR-06, R-05). Thresholds (0.75, 0.90) were re-measured on the tuning set only: ratio 0.317 to 0.576, pooled coverage 0.975 |
+| S-28 | Two disjoint seed sets live in `python/seed_sets.py` (moved from `tests/` in M4 so the ensemble tool can import them) (200 tuning, 50 held-out). The acceptance tests import only the held-out set, and a test checks both that and the disjointness | One seed list; a convention | Makes "performs well on unseen data" mechanically checkable (TST-012, CR-06, R-05). Thresholds (0.75, 0.90) were re-measured on the tuning set only: ratio 0.317 to 0.576, pooled coverage 0.975 |
 | S-29 | `analyze.py` returns `n_within_2sigma` as well as the fraction | The fraction only | Pooled coverage across seeds needs the counts, not an average of fractions (EST-012) |
+| S-30 | `analyze.py` REQUIRES the sidecar and rejects a missing one, an unknown `schema_version`, a missing key, or a row count that is not `steps + 1` | Treat the sidecar as optional | The format version lives only in the sidecar (baseline 8.9), so without it a CSV cannot be recognised. The row-count check catches a CSV paired with another run's settings. Hand-made CSVs in tests now need a sidecar |
+| S-31 | `metrics.json` has exactly the eight keys of baseline 8.7; `n_within_2sigma` stays in the Python result and on screen but not in the file. `improvement_ratio` is `null` when the raw RMSE is 0 | Add the count to the file; write NaN | Adding a key is an interface change needing a baseline edit (8.9); JSON has no NaN and OUT-005's "never nan" rule applies to every output |
+| S-32 | matplotlib is imported only inside `make_figure`, via `Figure` and not `pyplot`, and every output path is checked before any slow work | Import at the top; use `pyplot` | Metrics-only use and most unit tests need no plotting library and no global GUI state; a bad path fails in milliseconds instead of after the 2-3 s figure |
+| S-33 | matplotlib is pinned at 3.10.8, not 3.10.0 | 3.10.0 | 3.10.0 triggers 100+ deprecation warnings against the newest pyparsing that pip resolves; 3.10.8 is quiet and in the same minor series. A pinned set should not teach people to ignore warnings |
+| S-34 | `ensemble.py` owns the thresholds (0.75, 0.90) and the pass/fail logic; the acceptance tests import it; `--max-seeds` exists for quick tests and the report says "partial" when used | Duplicate the logic in the tests; always run all seeds in tests | One definition of "pass". 200-seed tests took the suite from 10 s to 48 s against the 30 s budget (NFR-006); a partial run cannot masquerade as acceptance |
+| S-35 | `docs/VALIDATION.md` is built from the tool's JSON output, and the held-out and scenario results are kept separate (held-out = acceptance; scenarios run on the tuning seeds, report only) | Hand-type the numbers; run scenarios on the held-out seeds | No transcription errors, and no scenario exploration can contaminate the held-out set (TST-012) |
 
 ## Not decided here
 
