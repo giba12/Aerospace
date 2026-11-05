@@ -53,16 +53,20 @@ Detail in `docs/M2_REPORT.md` and `docs/change-requests/CR-25-sidecar-null-estim
 
 Exit: EST-001..013 verified; VV-EST-01 passes; VAL-04 cross-check agrees.
 
-- [ ] **Work VV-EST-01 by hand first** (R-03). Then implement.
-- [ ] Hand-written `Mat2` arithmetic (D6/DD-004), then `KalmanEstimator` replacing the passthrough
-      (F, H, Q, predict, update in the Joseph form).
-- [ ] Add `EstimatorConfig` with validation (EST-010), and flags `--est-q`, `--est-r`, `--est-p0-pos`,
-      `--est-p0-vel`. R is independent of σ (CFG-003).
-- [ ] Reject non-finite or out-of-order measurements and leave state unchanged (EST-013).
-- [ ] Tests: EST-003, 004, 006 (1000-step symmetry), 007 (noise-free convergence), 009.
-- [ ] Clean up the throwaway Python prototype into an independent recomputation from the CSV (OI-06, DD-012).
-- [ ] Re-measure the thresholds on the C++ build (OI-02): 0.75 ratio, 0.90 coverage.
-- [ ] Tuning seeds and held-out seeds must be disjoint, with an automated check (TST-012).
+Built on branch `m3-estimator`; all EST-001..013 have passing tests (48 of 61 Musts covered overall).
+
+- [ ] **Work VV-EST-01 by hand** (R-03). Skipped at the owner's request; the worksheet is still in
+      `docs/M3_WORKSHEET.md` and its formulas match the code line for line. Worth doing before an interview.
+- [x] Hand-written `Mat2`/`Vec2` arithmetic (D6/DD-004) and `KalmanEstimator` (Joseph form).
+- [x] `EstimatorConfig` with validation (EST-010) and the `--est-*` flags; R independent of σ (CFG-003).
+- [x] Reject non-finite or out-of-order readings, state unchanged (EST-013).
+- [x] EST-003, 004, 006, 007, 009 tests; VV-EST-01 at 1e-9.
+- [x] Independent Python oracle in exact arithmetic (OI-06, DD-012, VAL-04), agreeing with the C++ in nine scenarios.
+- [x] Thresholds re-measured on the tuning seeds only (OI-02): ratio 0.317 to 0.576 (limit 0.75), coverage 0.975 (limit 0.90).
+- [x] Disjoint tuning and held-out seed sets with an automated check (TST-012). EST-008 and EST-012 pass on the 50 held-out seeds.
+- [ ] **Decide CR-26** (`docs/change-requests/CR-26-oracle-tolerance.md`): exact oracle plus the size-scaled
+      tolerance. The code already uses it; the baseline §6.3 row is unchanged until approved.
+- [ ] Open the M3 pull request and merge after review.
 
 ## 5. M4: Analysis (ANA-001..005)
 
