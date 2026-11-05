@@ -4,9 +4,9 @@
 > qualified for any use. It does not model a real sensor, real vehicle dynamics, or
 > operational sensor fusion. (SYS-006)
 
-**Status: M1 (truth model complete).** Every stage of the pipeline exists and runs. The truth
-model is real (constant velocity or constant acceleration); the sensor and estimator are still
-deliberately trivial stand-ins. See [Limitations](#limitations).
+**Status: M2 (truth model and noisy sensor complete).** Every stage of the pipeline exists and runs.
+The truth model (constant velocity or constant acceleration) and the seeded noisy sensor are real;
+the estimator is still a deliberately trivial stand-in. See [Limitations](#limitations).
 
 ## What this project demonstrates
 
@@ -58,7 +58,7 @@ cmake --build build
 cd build && ctest --output-on-failure && cd ..
 
 # 4. Run the simulator, then analyze its output
-./build/sim --steps 1000 --out run.csv
+./build/sim --steps 1000 --out run.csv     # also writes run.csv.config.json (settings, seed, build)
 .venv/bin/python python/analyze.py run.csv
 
 # 5. Check requirement traceability
@@ -70,17 +70,22 @@ cd build && ctest --output-on-failure && cd ..
 
 ## Expected output
 
-Until M2/M3, the "sensor" reads the truth exactly and the "estimator" repeats the latest reading, so
-every error metric is zero. That is correct for a skeleton and proves the pipeline, not the
-filter:
+The sensor adds Gaussian noise (default sigma 5 m, seed 42) and, until M3, the "estimator" just
+repeats the latest reading. So the estimate is exactly as noisy as the sensor, and its velocity is
+always 0 against a true 10 m/s. That proves the pipeline, not the filter:
 
 ```text
 n_rows = 1001
 n_measurements = 201
-rmse_meas_pos_m = 0.0
-rmse_est_pos_m = 0.0
+rmse_meas_pos_m = 5.4598541120696265
+rmse_est_pos_m = 5.4598541120696265
 rmse_est_vel_mps = 10.0
 ```
+
+The noise values come from the C++ standard library's `std::normal_distribution`, which the
+standard leaves implementation-defined. The same seed gives identical output on the same platform
+and build; the digits above are from GCC 13.3 and other toolchains will print different noise.
+`--sigma 0` gives an exact sensor, and the sidecar `run.csv.config.json` records every setting.
 
 (The velocity error is 10 because the stand-in estimator reports a velocity of 0.) A real plot
 and sample output arrive in M4.
@@ -115,16 +120,18 @@ def test_header(...):
 
 ## Limitations
 
-- The sensor is exact and the estimator is a passthrough. There is no noise, no Kalman filter,
-  no plot, and no sidecar JSON yet (milestones M2 to M4).
+- The estimator is a passthrough: it repeats the latest reading, so it is no better than the
+  sensor. There is no Kalman filter and no plot yet (milestones M3 and M4). The sidecar's
+  estimator keys are `null` until M3.
+- Sensor noise is reproducible only on the same platform and build (see Expected output).
 - One dimension. Acceleration, if any, is constant and known; Euler's error bound is `a·t·dt/2`.
-- 38 of 61 Must requirements have no passing test yet. `req_trace.py` prints the list; the
+- 28 of 61 Must requirements have no passing test yet. `req_trace.py` prints the list; the
   coverage gate (`--require-coverage`) is switched on in M5.
 - CI runs on every push (GCC 13 and Clang 18) and has passed on the pushed branches.
 
 ## Next steps
 
-M2 seeded noisy sensor and the sidecar, M3 Kalman filter checked
+M3 Kalman filter checked
 against the hand-computed vector VV-EST-01, M4 analysis plot and coverage metrics, M5
 sanitizers and the coverage gate. See baseline section 6.7.
 
