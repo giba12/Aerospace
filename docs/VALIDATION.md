@@ -1,5 +1,7 @@
 # Validation record: VAL-02 and VAL-03
 
+> This is a small educational simulation, not flight software, and it makes no claim of flight qualification, operational fidelity or real sensor fusion (SYS-006).
+
 This records how well the Kalman filter performs, as required by baseline section 6.7 for milestone M4
 ("VAL-02 and VAL-03 recorded on held-out seeds"). Everything below comes from `python/ensemble.py`, which
 runs the real `sim` once per seed; the commands to reproduce it are in section 5. It is simulated data

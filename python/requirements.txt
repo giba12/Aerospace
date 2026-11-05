@@ -1,15 +1,21 @@
-# Pinned (NFR-009). Direct dependencies: pytest (tests) and matplotlib (the plot, ANA-003).
-# Everything else is a transitive pin of those two, from `pip freeze`.
+# Pinned (NFR-009). Direct dependencies: pytest (tests), matplotlib (the plot, ANA-003) and gcovr
+# (the coverage report, NFR-008). Everything else is a transitive pin of those, from `pip freeze`.
+colorlog==6.12.0
 contourpy==1.4.0
 cycler==0.12.1
 fonttools==4.68.0
+gcovr==8.8
 iniconfig==2.3.1
+Jinja2==3.1.6
 kiwisolver==1.5.1
+lxml==6.1.3
+MarkupSafe==3.0.4
 matplotlib==3.10.8
 numpy==2.5.4
 packaging==26.3
 pillow==13.0.0
 pluggy==1.6.0
+Pygments==2.21.0
 pyparsing==3.3.3
 pytest==8.3.4
 python-dateutil==4.0.0

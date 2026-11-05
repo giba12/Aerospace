@@ -21,7 +21,7 @@ DynamicsConfig steps(std::int64_t n) {
 
 // RUN-001: the order of calls IS the specification, so the test compares the whole log.
 TEST(Runner, CallOrderMatchesSpecification) {
-    RecordProperty("requirements", "RUN-001,EST-009");
+    RecordProperty("requirements", "RUN-001,EST-009,TST-007");
     CallLog log;
     ScriptedSensor sensor(log, {1, 3});  // first reading arrives at step 1, not step 0
     RecordingEstimator estimator(log);

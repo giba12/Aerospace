@@ -12,6 +12,7 @@ add_executable(sim_gtest_tests
   estimator_tests.cpp
   kalman_tests.cpp
   mat2_tests.cpp
+  output_util_tests.cpp
   interface_tests.cpp
   recorder_tests.cpp
   runner_tests.cpp
