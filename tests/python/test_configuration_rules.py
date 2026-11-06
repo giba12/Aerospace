@@ -198,7 +198,7 @@ def test_ci_builds_and_runs_the_container_on_every_push():
 
 # ---- SYS-006, DOC-001: the documentation says what this is ----
 
-DISCLAIMED_DOCS = ["README.md", "docs/architecture.md", "docs/VALIDATION.md", "docs/FILE_MAP.md",
+DISCLAIMED_DOCS = ["README.md", "docs/architecture.md", "docs/VALIDATION.md", "docs/EVIDENCE.md", "docs/FILE_MAP.md",
                    "docs/M1_REPORT.md", "docs/M2_REPORT.md", "docs/M3_WORKSHEET.md",
                    "docs/ARCHITECTURE_REPORT.md", "docs/CODE_REPORT.md"]
 OVERCLAIM = re.compile(r"flight[- ]qualif|operational fidelity|(real|operational) sensor fusion", re.I)
