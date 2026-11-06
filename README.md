@@ -4,14 +4,15 @@
 > qualified for any use. It does not model a real sensor, real vehicle dynamics, or
 > operational sensor fusion. (SYS-006)
 
-**Status: M5 complete (hardening).** Every stage of the pipeline exists and
+**Status: M5 complete (hardening); M6 (release) in progress.** Every stage of the pipeline exists and
 runs. The truth model, the seeded noisy sensor and the Kalman filter are real. The filter is checked
 three ways: against the baseline's hand-worked vector, against an independent Python
 re-computation in exact arithmetic, and against 50 held-out random seeds (the result is recorded in
 [docs/VALIDATION.md](docs/VALIDATION.md)). `analyze.py` prints the metrics, writes `metrics.json`
 and draws the plot below. The whole suite also passes under AddressSanitizer and
 UndefinedBehaviorSanitizer, every Must requirement has a passing test (and CI fails the build if one
-loses it), and 94 % of the library's lines are covered by tests. See [Limitations](#limitations).
+loses it), and 94 % of the library's lines are covered by tests. [docs/EVIDENCE.md](docs/EVIDENCE.md)
+links every claim on this page to the test, run or file that supports it. See [Limitations](#limitations).
 
 ## What this project demonstrates
 
@@ -37,15 +38,16 @@ is in [docs/architecture.md](docs/architecture.md) and the
 
 ## Units and assumptions
 
-SI units throughout, with the unit in every field and flag name (`_m`, `_s`, `_mps`).
-Time is `t = k × dt`, computed per step, never accumulated. The model is one-dimensional,
+SI units throughout, with the unit in every CSV column, sidecar key and struct field name (`_m`, `_s`,
+`_mps`); `--help` shows each flag's unit.
+In the truth and the CSV, time is `t = k × dt`, computed per step, never accumulated. The model is one-dimensional,
 constant velocity by default, or constant acceleration with `--accel`. Truth is advanced with
-explicit Euler, which is exact when the acceleration is 0 and otherwise off by exactly
-`a·t·dt/2` (5 m for a = 1 m/s², t = 100 s, dt = 0.1 s; baseline VV-SIM-01).
+explicit Euler, which is exact when the acceleration is 0 and otherwise off by
+`a·t·dt/2`, to within floating-point rounding (5 m for a = 1 m/s², t = 100 s, dt = 0.1 s; baseline VV-SIM-01).
 
 ## Prerequisites
 
-Linux, GCC 13 or Clang 18, CMake ≥ 3.20, Ninja, Python 3.12 with `venv`, and network access on
+Linux, GCC 13 or Clang 18, CMake ≥ 3.20 (only 3.28 is tested), Ninja, Python 3.12 with `venv`, and network access on
 the first configure (GoogleTest is downloaded, pinned by SHA-256). Or just Docker or Podman: see
 [In a container](#in-a-container-optional).
 
@@ -100,7 +102,8 @@ held to the 30 second budget. The two options cannot be combined.
 
 A clean-room alternative to installing the toolchain: the image builds the program from a fresh copy of
 the source, installs the pinned Python packages, **runs the whole test suite inside the image**, and then
-runs the reference scenario. An image that exists is an image whose tests passed.
+runs the reference scenario. An image that exists is an image whose tests passed (unless it was built
+with `RUN_TESTS=0`, below).
 
 ```bash
 # Docker
@@ -126,8 +129,8 @@ prints "Emulate Docker CLI using podman"), use the Podman line.
   packages are not pinned, so a rebuild months later can differ slightly.
 - The image runs as a non-root user and contains no secrets; `.dockerignore` keeps the git history and
   local environments out of the build.
-- The build compiles GoogleTest and the project from scratch: expect several minutes (about 8 under rootless
-  Podman on the WSL machine this was developed on).
+- The build compiles GoogleTest and the project from scratch: expect a few minutes (about 8 under rootless
+  Podman on the WSL machine this was developed on, about 1.5 on CI).
 - Checked once, on 2026-11-05 with Podman: the container's `run.csv` was byte-identical to a native run's, and
   its `plot.png` and `metrics.json` to `data/example-plot.png` and `data/example-metrics.json`. That holds
   because both used GCC 13.3 and the same standard library. The sidecar differs only in `source_revision`,
@@ -160,14 +163,17 @@ true positions fall inside the filter's own +/-2 sigma error bars, against a req
 
 The noise values come from the C++ standard library's `std::normal_distribution`, which the
 standard leaves implementation-defined. The same seed gives identical output on the same platform
-and build; the digits above are from GCC 13.3 and other toolchains will print different noise.
-`--sigma 0` gives an exact sensor, and the sidecar `run.csv.config.json` records every setting.
+and build. The digits above are from GCC 13.3 with libstdc++; Clang 18 with the same library prints the
+same digits (a test checks this block against a fresh run, on both compilers in CI), but a different
+standard library (libc++, MSVC) may not.
+`--sigma 0` gives an exact sensor, and the sidecar `run.csv.config.json` records every setting except
+the output path.
 
 The plot (`data/example-plot.png`, from the command in step 4) shows the three things worth seeing. Top:
 the truth, the noisy readings and the filter's estimate. Middle: the position *error* of the estimate
-against the raw readings' error, with the filter's own +/-2 sigma bars shaded; the blue error stays inside
-the band and hugs zero while the orange readings scatter wider. Bottom: the velocity, which the sensor never
-measures, converging on the true 10 m/s within about six seconds.
+against the raw readings' error, with the filter's own +/-2 sigma bars shaded; the blue error is inside
+the band at 189 of the 201 readings (94 %) and hugs zero while the orange readings scatter wider. Bottom:
+the velocity, which the sensor never measures, within 1 m/s of the true 10 m/s from about 5 s on.
 
 ![truth, sensor readings and filter estimate](data/example-plot.png)
 
@@ -187,7 +193,7 @@ describes a different run (ANA-001); it writes `metrics.json` in the layout of b
 | `python/` | `analyze.py` (metrics, JSON, plot), `kalman_oracle.py` (independent re-computation), `ensemble.py` (runs many seeds, VAL-02/03), `seed_sets.py`, and the pinned `requirements.txt` |
 | `data/` | A small example plot and metrics file |
 | `tools/req_trace.py`, `tools/check_budget.py` | Requirement-to-test traceability and its CI gate; the 30 s test-time budget |
-| `docs/` | Requirements, baseline, architecture, `VALIDATION.md` (the VAL-02/03 record), change requests, and `requirements.csv` (the ID registry) |
+| `docs/` | Requirements, baseline, architecture, `VALIDATION.md` (the VAL-02/03 record), `EVIDENCE.md` (claim-to-evidence table), change requests, and `requirements.csv` (the ID registry) |
 
 ## Writing a test
 
@@ -212,8 +218,8 @@ def test_header(...):
   96 %); at `--accel 0.5` it is no better than the raw readings (ratio 1.05) and the true position
   is inside its own error bars only 42 % of the time. The acceptance tests (EST-008, EST-012) use
   the reference scenario with no acceleration and say nothing about this case.
-- The filter's `R` and `q` are not tuned for any scenario other than the reference one.
-- Sensor noise is reproducible only on the same platform and build (see Expected output).
+- The filter's `q` and `R` are the baseline's reference values (0.1 and 25) and have not been tuned for any scenario.
+- Sensor noise depends on the C++ standard library's normal distribution (see Expected output).
 - One dimension. Acceleration, if any, is constant and known; Euler's error bound is `a·t·dt/2`.
 - Validation is on simulated data from the model the filter assumes, and the exact figures depend on the
   C++ standard library's normal distribution. See `docs/VALIDATION.md` for what it does and does not show,
@@ -223,21 +229,27 @@ def test_header(...):
   inspection* of the build files, the CI workflow and the documents (`tests/python/test_configuration_rules.py`),
   as the baseline's verification matrix plans. They stop that configuration drifting; they are not behaviour
   tests. That CI really builds with both compilers on every push is shown by CI's own history.
-- Coverage: about 94 % of lines (94.0 % on the development machine, 94.5 % on CI), 100 % of functions, and
-  85 to 87 % of branches with compiler-generated exception edges excluded (59.6 % locally with them). The uncovered lines are mostly `std::function` bookkeeping in
-  the flag table, plus one error path (a failed final write) that needs fault injection to reach. GCC 13
-  cannot report condition coverage. The 90 % line goal is reported, never a gate.
+- Coverage, measured on 2026-11-05: about 94 % of lines (94.0 % on the development machine, 94.5 % on CI),
+  100 % of functions, and 85 to 87 % of branches with compiler-generated exception edges excluded (59.6 %
+  locally with them). Of the lines not covered, 12 are `std::function` bookkeeping in the flag table that
+  gcov reports even though the lambda bodies run, one more in the sidecar writer looks like the same
+  artifact (not investigated), and the rest are error paths that need fault injection to reach: a failed
+  final write, and a sidecar that cannot be committed after the CSV was. GCC 13 cannot report condition
+  coverage. The 90 % line goal is reported, never a gate.
 - The 30 second budget is checked on every normal CI build. On the slow WSL machine this was developed on
-  the suite takes about 25 s, so the margin there is thin; on CI it takes a few seconds.
-- CI runs on every push: GCC 13 and Clang 18 builds with warnings as errors, a sanitizer job and a coverage job.
+  the suite took 12 s with the machine idle (load average 1.4), 24 s under moderate load and 47 s under heavy
+  load (which fails the check), so the margin there depends on what else is running; on CI it takes 5 s (GCC)
+  to 14 s (Clang).
+- CI runs on every push: GCC 13 and Clang 18 builds with warnings as errors, a sanitizer job, a coverage
+  job and a container job.
 
 ## Next steps
 
-M6 release (claim-to-evidence table, the remaining validation records, tagging the baseline). The optional
-second test framework (Catch2, TST-010) was not built. See baseline section 6.7.
+Finish M6: the remaining validation records (VAL-05, VAL-06, VAL-08) and tagging the baseline (NFR-010).
+The optional second test framework (Catch2, TST-010) was not built. See baseline section 6.7.
 
 ## Troubleshooting
 
 - *A newer compiler fails the build on a warning:* configure with `-DSIM_WARNINGS_AS_ERRORS=OFF`.
-- *`system.pytest` fails with "No such file":* create the virtual environment (step 1).
+- *`system.pytest` is "Not Run" with "Could not find executable" `.venv/bin/python`:* create the virtual environment (step 1).
 - *Offline:* the first configure needs network access to fetch GoogleTest.
