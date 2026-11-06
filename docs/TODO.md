@@ -108,7 +108,9 @@ Exit: README complete; validation recorded; baseline tagged.
 
 - [ ] Replace the README's "expected output" with real output and a real plot; update Limitations
       (it currently says the sensor is exact and the estimator is a passthrough).
-- [ ] Claim-to-evidence table (VAL-07): every claim in README or resume points to a test or run.
+- [x] Claim-to-evidence table (VAL-07): `docs/EVIDENCE.md`, checked by `tests/python/test_evidence_table.py`. Building it
+      corrected 12 README statements and exposed one untested path (a flag with no value), now tested. The README
+      claims only; resume or interview claims are not in the repository and are listed as "not supported" there.
 - [x] `Dockerfile` and `.dockerignore` for a clean-room run (SYS-001 / VAL-01): the image builds from a fresh
       copy, runs the whole test suite inside it, then runs the reference scenario. A CI `container` job builds
       and runs it on every push. See architecture S-45 to S-50.

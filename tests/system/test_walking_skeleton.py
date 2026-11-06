@@ -3,6 +3,7 @@
 These never change when the C++ test framework changes. They check the walking skeleton
 end to end: flags in, CSV out, exit codes, and the Python analysis reading the result.
 """
+import re
 import subprocess
 import sys
 
@@ -46,6 +47,16 @@ def test_bad_input_exits_2_names_parameter_and_writes_nothing(run_sim, tmp_path,
     assert list(tmp_path.iterdir()) == []  # no CSV, no temp file
 
 
+@pytest.mark.req("CFG-002")
+@pytest.mark.parametrize("args", [["--steps"], ["--est-r"], ["--seed"]])
+def test_a_flag_with_no_value_is_a_usage_error(run_sim, args):
+    # The flag must be the LAST argument: followed by another flag it would swallow that flag as its value
+    # and report "not a number" instead, which is a different path (found by the coverage report).
+    result = run_sim(*args)
+    assert result.returncode == 2
+    assert result.stderr == f"sim: error: {args[0]}: missing value\n"
+
+
 @pytest.mark.req("CFG-002", "OUT-004")
 def test_unwritable_output_exits_1(run_sim):
     result = run_sim("--out", "/nonexistent-dir/run.csv")
@@ -53,13 +64,22 @@ def test_unwritable_output_exits_1(run_sim):
     assert "sim: error: " in result.stderr
 
 
+# Every flag `sim` accepts. Adding a flag means adding it here, which is the point: --help must list it.
+ALL_FLAGS = {"--steps", "--dt", "--x0", "--v0", "--meas-every", "--accel", "--sigma", "--seed", "--est-q",
+             "--est-r", "--est-p0-pos", "--est-p0-vel", "--sensor-id", "--out"}
+
+
 @pytest.mark.req("CFG-001")
-def test_help_lists_every_flag_with_its_unit_and_default(run_sim):
+def test_help_lists_every_flag_with_its_unit_and_default_and_each_default_is_accepted(run_sim):
     result = run_sim("--help")
     assert result.returncode == 0
-    for flag in ("--steps", "--dt", "--x0", "--v0", "--accel", "--meas-every", "--sigma", "--seed",
-                 "--sensor-id", "--out"):
-        assert flag in result.stdout
+    line = re.compile(r"^  (--[a-z0-9-]+) <value>  \[([^\]]+)\]  default (\S+)  ", re.M)
+    listed = {m.group(1): (m.group(2), m.group(3)) for m in line.finditer(result.stdout)}
+    assert set(listed) == ALL_FLAGS, f"--help lists {sorted(set(listed) ^ ALL_FLAGS)} differently"
+    for flag, (unit, default) in listed.items():
+        assert unit, f"{flag} has no unit"
+        # the printed default must be a value the flag really accepts, or the help is lying
+        assert run_sim("--steps", "5", "--out", "d.csv", flag, default).returncode == 0, f"{flag} {default}"
 
 
 @pytest.mark.req("ANA-002", "SYS-001")
