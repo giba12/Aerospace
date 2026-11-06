@@ -1,0 +1,6 @@
+# One line-ending convention for everyone: LF in the repository and on checkout. A CRLF file once caused
+# a spurious diff and a merge conflict in .vscode/settings.json.
+* text=auto eol=lf
+
+# Binary: never convert, never diff as text.
+*.png binary
