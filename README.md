@@ -1,5 +1,7 @@
 # sensor-sim: a sensor and state-estimation simulator
 
+[![ci](https://github.com/giba12/Aerospace/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/giba12/Aerospace/actions/workflows/ci.yml)
+
 > **This is a small educational simulation.** It is not flight software and has not been
 > qualified for any use. It does not model a real sensor, real vehicle dynamics, or
 > operational sensor fusion. (SYS-006)

@@ -113,7 +113,7 @@ def _prose_blocks():
     blocks = []
     for chunk in re.split(r"\n\s*\n", text):
         chunk = chunk.strip("\n")
-        if not chunk.strip() or chunk.lstrip().startswith(("#", "![")):
+        if not chunk.strip() or chunk.lstrip().startswith(("#", "![", "[![")):
             continue
         # a bulleted list is one claim set per bullet
         parts = re.split(r"(?m)^(?=- )", chunk) if chunk.lstrip().startswith("- ") else [chunk]

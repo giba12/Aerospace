@@ -19,7 +19,10 @@ Verified against GitHub on 2026-11-05.
       when merging #4; retrying the REST call succeeded and nothing was half-merged. (`gh pr edit` fails on the
       installed `gh` 2.45; retarget a PR with `gh api -X PATCH repos/OWNER/REPO/pulls/N -f base=master`.)
 - [x] **Local `master` is in sync with `origin/master`; the old worktree and the M1/M2/review branches are gone.**
-- [ ] **Delete the merged branches** `m3-estimator`, `m4-analysis` and `m5-hardening` on GitHub.
+- [ ] **Delete the merged branches** `m3-estimator`, `m4-analysis`, `m5-hardening`, `m6-release` and `m6-evidence` on GitHub
+      (all merged; tips e184c30, c0e72d9, dac9aa7, c1c641c, d5262d7 stay reachable through the merge commits). The permission
+      classifier blocked this in the polish pass, so it needs an explicit go-ahead or `git push origin --delete ...` from you.
+- [x] Repository description, ten topics and delete-branch-on-merge set on GitHub (architecture S-56).
 - [ ] **Choose a `LICENSE`.** GitHub reports none and no branch contains one. Owner's choice (guide section 5).
 - [ ] **Confirm OI-01:** GoogleTest via `FetchContent`, pinned by SHA-256. It is implemented and CI is
       green; this is the formal sign-off (S-1 in `docs/architecture.md`).
