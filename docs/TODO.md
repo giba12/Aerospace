@@ -14,14 +14,19 @@ Verified against GitHub on 2026-11-05.
 
 - [x] **Remote exists.** `origin` is `github.com/giba12/Aerospace` (private).
 - [x] **CI has run and is green** on GCC 13 and Clang 18, including on `master` after both merges.
-- [x] **VS Code CMake path fixed** (`${workspaceFolder}`, commit `3c0c024`, merged).
+- [x] **VS Code CMake path fixed** (`${workspaceFolder}`, commit `1c314cb`, merged).
 - [x] **PRs #1 to #5 (M1 to M5) merged** on 2026-11-05 with merge commits. GitHub returned transient HTTP 500s
       when merging #4; retrying the REST call succeeded and nothing was half-merged. (`gh pr edit` fails on the
       installed `gh` 2.45; retarget a PR with `gh api -X PATCH repos/OWNER/REPO/pulls/N -f base=master`.)
 - [x] **Local `master` is in sync with `origin/master`; the old worktree and the M1/M2/review branches are gone.**
-- [ ] **Delete the merged branches** `m3-estimator`, `m4-analysis`, `m5-hardening`, `m6-release` and `m6-evidence` on GitHub
-      (all merged; tips e184c30, c0e72d9, dac9aa7, c1c641c, d5262d7 stay reachable through the merge commits). The permission
-      classifier blocked this in the polish pass, so it needs an explicit go-ahead or `git push origin --delete ...` from you.
+- [x] **Merged branches are gone from GitHub** (`git ls-remote` shows only `master`). Local copies of seven merged branches
+      remain in the working clone; delete them with `git branch -d` if you want a tidy checkout.
+- [x] **Author email and name rewritten out of `master`'s history** (2026-11-06): all 31 commits now use the GitHub noreply
+      address; every commit SHA changed, and the SHAs quoted in the docs were updated to match. File content is identical
+      commit for commit (checked by tree hash). See architecture S-57.
+- [ ] **The old commits are still reachable on GitHub** by SHA and through the 8 `refs/pull/N/head` refs, which a push cannot
+      change. It matters only if the repository is made public. Fixes: GitHub Support can purge them, or recreate the
+      repository from the rewritten history (which loses PRs, issues and Actions history).
 - [x] Repository description, ten topics and delete-branch-on-merge set on GitHub (architecture S-56).
 - [ ] **Choose a `LICENSE`.** GitHub reports none and no branch contains one. Owner's choice (guide section 5).
 - [ ] **Confirm OI-01:** GoogleTest via `FetchContent`, pinned by SHA-256. It is implemented and CI is
@@ -82,7 +87,7 @@ Built on branch `m4-analysis` (49 of 61 Musts covered overall).
 - [x] VAL-02 and VAL-03 recorded on the held-out seeds: `docs/VALIDATION.md`.
 - [x] S-HIGH-NOISE, S-SPARSE, S-WRONG-R measured (exploratory, tuning seeds). The baseline still lists them as
       [TBD]; update §5.2 if wanted. **S-SPARSE is a surprise:** coverage holds but the filter helps much less.
-- [x] `docs/VALIDATION.md` held-out section regenerated from a clean commit (`731465de771b`); the numbers did not change.
+- [x] `docs/VALIDATION.md` held-out section regenerated from a clean commit (`15950bedeb44`, renamed from `731465de771b` by the history rewrite); the numbers did not change.
 - [x] M4 pull request merged (#4).
 
 ## 6. M5: Hardening (NFR-001, 006..008, TST-010, TST-011)

@@ -21,7 +21,7 @@ The held-out seeds (1001 to 1050) were never used to choose a filter setting or 
 
 - Seeds: `held-out` (50 seeds, 1001 to 1050)
 - `sim` flags: `(defaults: the reference scenario)`
-- Build: gcc 13.3.0, source revision `731465de771b`
+- Build: gcc 13.3.0, source revision `15950bedeb44`
 - Run on 2026-11-05
 
 | Check | Requirement | Result | Measured | Limit |
