@@ -53,6 +53,16 @@ Linux, GCC 13 or Clang 18, CMake ≥ 3.20 (only 3.28 is tested), Ninja, Python 3
 the first configure (GoogleTest is downloaded, pinned by SHA-256). Or just Docker or Podman: see
 [In a container](#in-a-container-optional).
 
+## Quick start (one command)
+
+```bash
+./run.sh
+```
+
+Run from the project folder, `./run.sh` creates the Python environment, builds the simulator, runs the reference scenario, prints the metrics and the independent cross-check, and leaves `run.csv`, `run.csv.config.json`, `metrics.json` and `plot.png` in `./out`.
+
+The first run downloads the Python packages, which takes minutes; a later run takes under a minute. `./run.sh --test` first builds and runs the whole test suite, which also downloads GoogleTest. `./run.sh --clean` starts from scratch, and `./run.sh -- --sigma 2 --seed 7` passes flags to the simulator. If a required tool is missing, the script says which.
+
 ## Build, test, run, analyze
 
 ```bash

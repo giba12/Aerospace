@@ -18,3 +18,5 @@ run.csv.tmp
 /metrics.json
 /plot.png
 build-*/
+/out/
+build-run/
