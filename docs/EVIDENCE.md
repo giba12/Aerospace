@@ -127,6 +127,11 @@ recorded observation. A claim that could not be supported was changed in the REA
 | C-96 | *A newer compiler fails the build on a warning:* configure with `-DSIM_WARNINGS_AS_ERRORS=OFF`. | file:CMakeLists.txt | I | Advice, not a measurement. The option exists; the OFF configuration is not built by CI and no newer compiler has been tried. |
 | C-97 | *`system.pytest` is "Not Run" with "Could not find executable" `.venv/bin/python`:* create the virtual environment (step 1). | obs:reproduced with a throwaway CTestTestfile pointing at a missing interpreter, 2026-11-05 | R | |
 | C-98 | *Offline:* the first configure needs network access to fetch GoogleTest. | file:tests/gtest/CMakeLists.txt | I | |
+| C-99 | Run from the project folder, `./run.sh` creates the Python environment, builds the simulator, runs the reference scenario, prints the metrics and the independent cross-check, and leaves `run.csv`, `run.csv.config.json`, `metrics.json` and `plot.png` in `./out`. | file:run.sh ; obs:run from a fresh checkout on the development machine, 2026-11-19: it printed the metrics of "Expected output" and the oracle agreement, and wrote the four files | I R | Not run by CI or by any test; the Dockerfile is the automated clean-room path. |
+| C-100 | The first run downloads the Python packages, which takes minutes; a later run takes under a minute. | obs:first run 6 min 23 s including the pip download and build, second run 18 s, 2026-11-19 | R | Depends on the network and the machine. |
+| C-101 | `./run.sh --test` first builds and runs the whole test suite, which also downloads GoogleTest. | file:run.sh ; file:tests/gtest/CMakeLists.txt | I | |
+| C-102 | `./run.sh --clean` starts from scratch, and `./run.sh -- --sigma 2 --seed 7` passes flags to the simulator. | file:run.sh | I | |
+| C-103 | If a required tool is missing, the script says which. | file:run.sh ; obs:on a machine without python3-venv the script stopped with that message, 2026-11-19 | I R | Checked for one missing tool only. |
 
 ## What this review changed in the README
 
