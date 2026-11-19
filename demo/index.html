@@ -1,0 +1,1148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>sensor-sim Walkthrough</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one reading column of sections; the lab is the wide centrepiece. Data colours are fixed by role
+   everywhere: ink = truth, orange = raw sensor readings, blue = the filter's estimate. */
+:root {
+  --bg: #f3f5f8; --surface: #ffffff; --surface2: #e9edf3; --ink: #0e1a2b; --ink2: #46546a; --ink3: #5b687c;
+  --line: #d3dae5; --blue: #2a78d6; --blue-ink: #1b5aa8; --orange: #eb6834; --orange-ink: #b04418;
+  --good: #16794c; --good-bg: #e0f3e8; --bad: #b3261e; --bad-bg: #fbe8e5; --code-bg: #0f1d33; --code-ink: #dbe6f5; --code-dim: #8da2c0;
+  --font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0b121d; --surface: #121b2a; --surface2: #1a2639; --ink: #e9eef6; --ink2: #b3bfd1; --ink3: #8d9bb1;
+    --line: #273650; --blue: #3987e5; --blue-ink: #86b9f4; --orange: #d95926; --orange-ink: #f19572;
+    --good: #5fd39a; --good-bg: #123325; --bad: #ff9a92; --bad-bg: #3a1a19; --code-bg: #0a1424; --code-ink: #dbe6f5; --code-dim: #7f93b3;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0b121d; --surface: #121b2a; --surface2: #1a2639; --ink: #e9eef6; --ink2: #b3bfd1; --ink3: #8d9bb1;
+  --line: #273650; --blue: #3987e5; --blue-ink: #86b9f4; --orange: #d95926; --orange-ink: #f19572;
+  --good: #5fd39a; --good-bg: #123325; --bad: #ff9a92; --bad-bg: #3a1a19; --code-bg: #0a1424; --code-ink: #dbe6f5; --code-dim: #7f93b3;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 12px; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 var(--font-sans); -webkit-text-size-adjust: 100%; }
+[hidden] { display: none !important; }
+a { color: var(--blue-ink); text-underline-offset: 2px; }
+a:hover { text-decoration-thickness: 2px; }
+:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 3px; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px)); }
+section { padding-block: 56px; border-top: 1px solid var(--line); }
+h1, h2, h3 { margin: 0; line-height: 1.15; text-wrap: balance; font-weight: 600; letter-spacing: -0.015em; }
+h1 { font-size: clamp(2rem, 4.6vw, 3.1rem); max-width: 30ch; }
+h2 { font-size: clamp(1.45rem, 2.6vw, 1.9rem); }
+h3 { font-size: 1.05rem; letter-spacing: -0.005em; }
+p { margin: 0; }
+.eyebrow { font: 500 12px/1.2 var(--font-mono); letter-spacing: .09em; text-transform: uppercase; color: var(--ink3); }
+.lede { font-size: 1.15rem; color: var(--ink2); max-width: 62ch; }
+.prose { max-width: 66ch; color: var(--ink2); }
+.sec-head { display: grid; gap: 10px; margin-bottom: 28px; }
+.mono { font-family: var(--font-mono); }
+.num { font-variant-numeric: tabular-nums; }
+
+/* top bar */
+.top { display: flex; flex-wrap: wrap; gap: 8px 22px; align-items: center; justify-content: space-between; padding-block: 16px; }
+.brand { font: 500 15px var(--font-mono); letter-spacing: -.01em; }
+.brand b { color: var(--blue-ink); font-weight: 500; }
+.top nav { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 14px; }
+.top nav a { color: var(--ink2); text-decoration: none; padding-block: 4px; }
+.top nav a:hover { color: var(--ink); text-decoration: underline; }
+
+/* hero */
+.hero { padding-block: 24px 40px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+.disclaimer { display: inline-block; font-size: 13px; color: var(--ink2); border: 1px solid var(--line); background: var(--surface); padding: 6px 10px; border-radius: 6px; max-width: 70ch; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 28px 40px; }
+.two h3 { margin-bottom: 8px; }
+.two p { color: var(--ink2); }
+.hero-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.btn { font: 500 14px var(--font-sans); padding: 9px 14px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; min-height: 38px; display: inline-flex; align-items: center; gap: 8px; text-decoration: none; }
+.btn:hover { border-color: var(--ink3); }
+.btn.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+/* lab */
+.lab { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: clamp(12px, 2.4vw, 22px); display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.pipeline { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; align-items: stretch; }
+.node { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--surface); transition: background .35s, border-color .35s; min-width: 0; position: relative; }
+.node + .node { margin-left: 22px; }
+.node + .node::before { content: "→"; position: absolute; left: -19px; top: 50%; transform: translateY(-50%); color: var(--ink3); font: 16px var(--font-mono); }
+.node.on { background: color-mix(in srgb, var(--blue) 14%, var(--surface)); border-color: var(--blue); }
+.node.on.sensor { background: color-mix(in srgb, var(--orange) 16%, var(--surface)); border-color: var(--orange); }
+.node .k { font: 500 11px/1.2 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink3); }
+.node .t { font-weight: 600; font-size: 14px; margin-top: 2px; }
+.node .v { font: 13px/1.35 var(--font-mono); color: var(--ink2); margin-top: 4px; min-height: 2.7em; overflow-wrap: anywhere; }
+.firewall { font-size: 13px; color: var(--ink2); display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.firewall b { color: var(--ink); font-weight: 600; }
+.tag { font: 500 11px/1 var(--font-mono); padding: 4px 6px; border-radius: 4px; background: var(--surface2); color: var(--ink2); letter-spacing: .03em; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--ink2); }
+.legend span { display: inline-flex; align-items: center; gap: 7px; }
+.sw { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+.sw.truth { background: var(--ink); border-radius: 2px; transform: rotate(45deg) scale(.85); }
+.sw.read { background: var(--orange); }
+.sw.est { background: var(--blue); }
+.sw.band { background: color-mix(in srgb, var(--blue) 25%, transparent); border: 1px solid var(--blue); border-radius: 2px; width: 16px; height: 10px; }
+.stagewrap { position: relative; }
+#stage { width: 100%; display: block; touch-action: pan-y; cursor: crosshair; }
+.tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--bg); font: 12px/1.45 var(--font-mono); padding: 7px 9px; border-radius: 6px; max-width: 250px; z-index: 3; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+
+.transport { display: grid; grid-template-columns: auto 1fr auto; gap: 10px 14px; align-items: center; }
+.transport .btns { display: flex; gap: 8px; }
+.transport input[type=range] { width: 100%; min-width: 0; }
+.clock { font: 13px var(--font-mono); color: var(--ink2); white-space: nowrap; }
+.speed { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.speed label { cursor: pointer; }
+.speed input { position: absolute; opacity: 0; pointer-events: none; }
+.speed span { display: block; padding: 7px 11px; font: 500 13px var(--font-mono); color: var(--ink2); min-height: 36px; line-height: 22px; }
+.speed input:checked + span { background: var(--ink); color: var(--bg); }
+.speed input:focus-visible + span { outline: 2px solid var(--blue); outline-offset: -2px; }
+.speed label + label span { border-left: 1px solid var(--line); }
+@media (max-width: 640px) { .transport { grid-template-columns: 1fr; } }
+input[type=range] { accent-color: var(--blue); height: 28px; }
+
+.presets { display: flex; flex-wrap: wrap; gap: 8px; }
+.preset-note { background: var(--surface2); border-radius: 8px; padding: 12px 14px; font-size: 14.5px; color: var(--ink2); min-height: 4.2em; }
+.preset-note b { color: var(--ink); }
+
+.tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.tile { border: 1px solid var(--line); border-radius: 8px; padding: 12px; display: grid; gap: 4px; align-content: start; min-width: 0; background: var(--surface); }
+.tile .lab-t { font-size: 13px; color: var(--ink2); display: flex; gap: 7px; align-items: center; }
+.tile .big { font: 600 1.7rem/1.1 var(--font-sans); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.tile .big small { font-size: .9rem; font-weight: 500; color: var(--ink2); margin-left: 3px; letter-spacing: 0; }
+.tile .sub { font-size: 12.5px; color: var(--ink3); }
+.chip { display: inline-flex; gap: 5px; align-items: center; font: 500 12px/1 var(--font-sans); padding: 5px 8px; border-radius: 99px; width: fit-content; }
+.chip.ok { background: var(--good-bg); color: var(--good); }
+.chip.no { background: var(--bad-bg); color: var(--bad); }
+.chip.na { background: var(--surface2); color: var(--ink3); }
+@media (max-width: 960px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .tiles .tile:last-child { grid-column: 1 / -1; } }
+@media (max-width: 640px) { .pipeline { grid-template-columns: 1fr 1fr; gap: 10px; } .node + .node { margin-left: 0; } .node + .node::before { display: none; } }
+
+.knobs { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 14px 26px; border-top: 1px solid var(--line); padding-top: 16px; }
+.knob { display: grid; gap: 2px; min-width: 0; }
+.knob .row { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
+.knob .row output { font: 500 13px var(--font-mono); color: var(--blue-ink); white-space: nowrap; }
+.knob .hint { font-size: 12.5px; color: var(--ink3); }
+.knob input[type=number] { font: 14px var(--font-mono); width: 100%; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); min-height: 34px; }
+.source { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--ink2); }
+details.table { font-size: 13px; }
+details.table summary { cursor: pointer; color: var(--ink2); padding-block: 4px; }
+.scroll-x { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font: 500 11.5px var(--font-mono); letter-spacing: .05em; text-transform: uppercase; color: var(--ink3); }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* one update */
+.bellbox { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: clamp(12px, 2.4vw, 22px); display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+#bell { width: 100%; display: block; }
+.steps { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.steps .btn b { font: 500 12px var(--font-mono); opacity: .7; }
+.readout { font-size: 15px; color: var(--ink2); min-height: 3.2em; }
+.readout b { color: var(--ink); }
+.auto { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; color: var(--ink2); margin-left: auto; }
+
+/* modules */
+.mods { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.mods [role=tablist] { display: flex; flex-direction: column; background: var(--surface2); border-right: 1px solid var(--line); }
+.mods [role=tab] { text-align: left; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 13px 16px; cursor: pointer; font: 14px var(--font-sans); color: var(--ink2); display: grid; gap: 2px; }
+.mods [role=tab] .f { font: 11.5px var(--font-mono); color: var(--ink3); }
+.mods [role=tab][aria-selected=true] { background: var(--surface); color: var(--ink); box-shadow: inset 3px 0 0 var(--blue); font-weight: 600; }
+.mods [role=tabpanel] { padding: clamp(14px, 2.4vw, 24px); display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-width: 0; align-content: start; }
+.mods h3 + p { color: var(--ink2); }
+.ids { display: flex; flex-wrap: wrap; gap: 6px; }
+.idchip { font: 500 12px var(--font-mono); padding: 5px 8px; border-radius: 5px; border: 1px solid var(--line); background: var(--surface); color: var(--blue-ink); cursor: pointer; }
+.idchip:hover { border-color: var(--blue); }
+pre.code { margin: 0; background: var(--code-bg); color: var(--code-ink); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font: 12.5px/1.6 var(--font-mono); tab-size: 4; }
+pre.code .cm { color: var(--code-dim); }
+.src-link { font: 12.5px var(--font-mono); }
+@media (max-width: 760px) { .mods { grid-template-columns: 1fr; } .mods [role=tablist] { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); } .mods [role=tab] { white-space: nowrap; border-bottom: 0; border-right: 1px solid var(--line); } .mods [role=tab][aria-selected=true] { box-shadow: inset 0 -3px 0 var(--blue); } }
+
+/* proof */
+.checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 14px; margin-bottom: 30px; }
+.check { border: 1px solid var(--line); border-radius: 8px; padding: 14px; background: var(--surface); display: grid; gap: 6px; align-content: start; }
+.check .n { font: 500 12px var(--font-mono); color: var(--ink3); letter-spacing: .06em; text-transform: uppercase; }
+.check p { font-size: 14.5px; color: var(--ink2); }
+.charts { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: clamp(12px, 2.4vw, 22px); display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; position: relative; }
+.chart h3 { font-size: .98rem; }
+.chart .cap { font-size: 13.5px; color: var(--ink2); margin-bottom: 6px; }
+.chart svg { display: block; width: 100%; overflow: visible; }
+svg text { font-family: var(--font-mono); fill: var(--ink3); font-size: 11px; }
+svg .ax { stroke: var(--line); }
+
+/* trace */
+.trace { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 22px; align-items: start; }
+@media (max-width: 860px) { .trace { grid-template-columns: 1fr; } .reqbox { position: static; } }
+.grid-wrap { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 12px; }
+.grp { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 8px; align-items: center; }
+.grp .gl { font-size: 12.5px; color: var(--ink2); line-height: 1.25; }
+.grp .cells { display: flex; flex-wrap: wrap; gap: 5px; }
+@media (max-width: 480px) { .grp { grid-template-columns: 1fr; gap: 4px; } }
+.cell { width: 38px; height: 28px; font: 500 11px var(--font-mono); border-radius: 4px; border: 1.5px solid var(--blue); background: var(--blue); color: #fff; cursor: pointer; padding: 0; }
+.cell.opt { border-radius: 14px; }
+.cell.none { background: transparent; color: var(--orange-ink); border: 1.5px dashed var(--orange); }
+.cell.dim { opacity: .22; }
+.cell[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: 2px; }
+.key { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12.5px; color: var(--ink2); align-items: center; }
+.key i { display: inline-block; width: 22px; height: 14px; border-radius: 3px; background: var(--blue); vertical-align: -2px; margin-right: 6px; }
+.key i.opt { border-radius: 8px; }
+.key i.none { background: transparent; border: 1.5px dashed var(--orange); }
+.reqbox { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 12px; position: sticky; top: 12px; }
+.reqbox .rid { font: 500 1.5rem var(--font-mono); letter-spacing: -.02em; }
+.reqbox .txt { color: var(--ink); font-size: 15px; }
+.reqbox ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; max-height: 260px; overflow: auto; }
+.reqbox li { font-size: 13px; line-height: 1.4; border-left: 2px solid var(--blue); padding-left: 10px; }
+.reqbox li a { font: 12px var(--font-mono); overflow-wrap: anywhere; display: block; color: var(--ink3); }
+.reqbox li code { font: 12.5px var(--font-mono); overflow-wrap: anywhere; }
+.search { font: 14px var(--font-sans); padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); width: 100%; min-height: 38px; }
+
+/* limits, run */
+.verdict { display: inline-flex; gap: 5px; align-items: center; font: 500 12px var(--font-sans); padding: 4px 8px; border-radius: 99px; }
+.verdict.pass { background: var(--good-bg); color: var(--good); }
+.verdict.fail { background: var(--bad-bg); color: var(--bad); }
+.limits { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.limits th, .limits td { white-space: normal; vertical-align: top; } .limits td .verdict, .limits td.n { white-space: nowrap; } .limits .try { white-space: nowrap; }
+.runbox { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; max-width: 760px; }
+.copyrow { position: relative; }
+.copyrow .btn { position: absolute; right: 8px; top: 8px; min-height: 30px; padding: 4px 10px; font-size: 12.5px; background: var(--surface); }
+.habits { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 12px 36px; margin: 0; padding: 0; list-style: none; }
+.habits li { display: grid; align-content: start; gap: 2px; font-size: 14.5px; color: var(--ink2); border-top: 1px solid var(--line); padding-top: 10px; }
+.habits b { color: var(--ink); font-weight: 600; }
+footer { border-top: 1px solid var(--line); padding-block: 28px 44px; font-size: 13.5px; color: var(--ink2); display: grid; gap: 8px; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .node { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">sensor<b>-</b>sim</div>
+    <nav aria-label="Sections">
+      <a href="#lab">Watch it work</a><a href="#update">One update</a><a href="#build">How it is built</a>
+      <a href="#proof">Proof</a><a href="#trace">Traceability</a><a href="#limits">Limits</a><a href="#run">Run it</a>
+    </nav>
+  </header>
+
+  <div class="hero">
+    <p class="eyebrow">A walkthrough of the project · C++17 and Python</p>
+    <h1>How far can you trust a sensor that is always a little wrong?</h1>
+    <p class="lede">sensor-sim simulates an object moving along a line, reads its position through a noisy sensor, and recovers the true position, and the speed the sensor never measures, using only those readings. It then checks its own answer against the truth it kept hidden.</p>
+    <div class="two">
+      <div>
+        <h3>What it does</h3>
+        <p>Truth is simulated first, so the exact answer is always known. A seeded sensor adds random error to a reading every half second. A Kalman filter turns the readings into a running estimate with its own error bars. A recorder writes every step to a CSV, and a Python script scores the estimate against the truth.</p>
+      </div>
+      <div>
+        <h3>What it sets out to show</h3>
+        <p>That an estimator can be built the way safety-minded teams build software: every requirement has an ID, every test names the requirement it checks, a script fails the build when one loses its test, and each claim is checked against data the filter was never tuned on. The page below lets you see both halves.</p>
+      </div>
+    </div>
+    <p class="disclaimer"><b>Educational simulation.</b> It is not flight software and has not been qualified for any use. It does not model a real sensor, real vehicle dynamics, or operational sensor fusion (SYS-006).</p>
+    <div class="hero-actions">
+      <a class="btn primary" href="#lab">▶ Watch it work</a>
+      <a class="btn" href="https://github.com/giba12/Aerospace">Source on GitHub</a>
+    </div>
+  </div>
+</div>
+
+<main>
+<section id="lab">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Live demo</p>
+      <h2>Watch the filter find the truth</h2>
+      <p class="prose">The black marker is the real object. Orange dots are what the sensor reports, off by about 5 m. Blue is the filter's guess, using the orange dots alone. Press play, then change anything below the chart: the whole run is recalculated at once. Drag across the lower charts to scrub through time.</p>
+    </div>
+
+    <div class="lab">
+      <div class="pipeline" id="pipe" aria-label="Live view of the four stages of the program">
+        <div class="node" id="n-truth"><div class="k">1 · Truth model</div><div class="t">Where it really is</div><div class="v" id="v-truth"></div></div>
+        <div class="node sensor" id="n-sensor"><div class="k">2 · Sensor</div><div class="t">Noisy reading, now and then</div><div class="v" id="v-sensor"></div></div>
+        <div class="node" id="n-filter"><div class="k">3 · Kalman filter</div><div class="t">Best guess + its doubt</div><div class="v" id="v-filter"></div></div>
+        <div class="node" id="n-rec"><div class="k">4 · Recorder</div><div class="t">One CSV row per step</div><div class="v" id="v-rec"></div></div>
+      </div>
+      <p class="firewall"><span class="tag">SYS-002</span><span><b>The filter never sees the truth.</b> It receives only stage 2's readings. Truth goes to the recorder, which is how the result is graded.</span></p>
+
+      <div class="legend" aria-label="Legend">
+        <span><i class="sw truth"></i>True position (hidden from the filter)</span>
+        <span><i class="sw read"></i>Sensor reading</span>
+        <span><i class="sw est"></i>Filter estimate</span>
+        <span><i class="sw band"></i>Filter's own ±2σ error bars</span>
+      </div>
+
+      <div class="stagewrap">
+        <canvas id="stage" role="img" aria-label="Animated chart. Top: a moving object, its noisy sensor readings and the filter's estimate. Middle: position error of readings and estimate over time. Bottom: true and estimated velocity."></canvas>
+        <div class="tip" id="tip" hidden></div>
+      </div>
+
+      <div class="transport">
+        <div class="btns">
+          <button class="btn primary" id="play" type="button" aria-label="Pause">❚❚ Pause</button>
+          <button class="btn" id="replay" type="button">↺ Replay</button>
+        </div>
+        <input type="range" id="scrub" min="0" max="1000" value="0" aria-label="Time in the run">
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <span class="clock" id="clock"></span>
+          <div class="speed" role="radiogroup" aria-label="Playback speed">
+            <label><input type="radio" name="speed" value="1"><span>1×</span></label>
+            <label><input type="radio" name="speed" value="5" checked><span>5×</span></label>
+            <label><input type="radio" name="speed" value="10"><span>10×</span></label>
+            <label><input type="radio" name="speed" value="25"><span>25×</span></label>
+          </div>
+        </div>
+      </div>
+
+      <div class="tiles" aria-label="Running results up to the current time">
+        <div class="tile"><div class="lab-t"><i class="sw read"></i>Raw sensor error</div><div class="big num" id="m-meas">—</div><div class="sub">RMSE of the readings</div></div>
+        <div class="tile"><div class="lab-t"><i class="sw est"></i>Filter error</div><div class="big num" id="m-est">—</div><div class="sub">RMSE of the estimate</div></div>
+        <div class="tile"><div class="lab-t">Filter ÷ raw</div><div class="big num" id="m-ratio">—</div><div class="sub" id="m-ratio-chip"></div></div>
+        <div class="tile"><div class="lab-t">Truth inside its own bars</div><div class="big num" id="m-cov">—</div><div class="sub" id="m-cov-chip"></div></div>
+        <div class="tile"><div class="lab-t">Velocity error</div><div class="big num" id="m-vel">—</div><div class="sub">The sensor never measures speed</div></div>
+      </div>
+
+      <div>
+        <p class="eyebrow" style="margin-bottom:8px">Try a scenario</p>
+        <div class="presets" id="presets"></div>
+      </div>
+      <p class="preset-note" id="presetNote" aria-live="polite"></p>
+
+      <div class="knobs" id="knobs">
+        <div class="knob"><div class="row"><label for="k-sigma">Sensor noise</label><output id="o-sigma"></output></div><input type="range" id="k-sigma" min="0" max="20" step="0.5"><div class="hint">How wrong each reading is, typically (σ).</div></div>
+        <div class="knob"><div class="row"><label for="k-every">Time between readings</label><output id="o-every"></output></div><input type="range" id="k-every" min="1" max="50" step="1"><div class="hint">The simulation steps every 0.1 s.</div></div>
+        <div class="knob"><div class="row"><label for="k-accel">Acceleration of the object</label><output id="o-accel"></output></div><input type="range" id="k-accel" min="0" max="1" step="0.05"><div class="hint">The filter assumes constant speed.</div></div>
+        <div class="knob"><div class="row"><label for="k-r">Sensor noise the filter believes</label><output id="o-r"></output></div><input type="range" id="k-r" min="0.5" max="20" step="0.5"><div class="hint">Set separately from the true noise, on purpose (CFG-003).</div></div>
+        <div class="knob"><div class="row"><label for="k-q">Allowance for the unexpected</label><output id="o-q"></output></div><input type="range" id="k-q" min="0" max="2" step="0.05"><div class="hint">The filter's process noise, q.</div></div>
+        <div class="knob"><div class="row"><label for="k-seed">Random seed</label><output id="o-seed"></output></div><div style="display:flex;gap:8px"><input type="number" id="k-seed" min="0" max="999999" step="1"><button class="btn" id="reseed" type="button" style="white-space:nowrap;flex:none">New noise</button></div><div class="hint">Same seed, same readings, every time (SEN-004).</div></div>
+      </div>
+
+      <div class="source">
+        <span class="chip na" id="srcChip"></span>
+        <span id="srcText"></span>
+        <button class="btn" id="resetRef" type="button" style="margin-left:auto">Back to the recorded run</button>
+      </div>
+      <details class="table">
+        <summary>Show the numbers behind the chart (latest readings)</summary>
+        <div class="scroll-x"><table><thead><tr><th class="n">Step</th><th class="n">Time s</th><th class="n">Truth m</th><th class="n">Reading m</th><th class="n">Reading error</th><th class="n">Estimate m</th><th class="n">Estimate error</th><th class="n">±2σ m</th></tr></thead><tbody id="rows"></tbody></table></div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<section id="update">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">The idea in one picture</p>
+      <h2>One reading, one update</h2>
+      <p class="prose">The filter keeps two things: a best guess and how unsure it is. Between readings it moves the guess forward and lets the doubt grow. When a reading arrives it blends the reading into the guess. The more doubt the filter has compared with the sensor's noise, the harder it leans on the reading. The result is narrower than either input.</p>
+    </div>
+    <div class="bellbox">
+      <div class="steps" id="bellSteps">
+        <button class="btn" type="button" data-s="0" aria-pressed="false"><b>1</b> Predict</button>
+        <button class="btn" type="button" data-s="1" aria-pressed="false"><b>2</b> A reading arrives</button>
+        <button class="btn" type="button" data-s="2" aria-pressed="true"><b>3</b> Update</button>
+        <label class="auto"><input type="checkbox" id="bellAuto" checked> Play automatically</label>
+      </div>
+      <canvas id="bell" role="img" aria-label="Three bell curves along a position axis: the filter's guess, the sensor reading, and the narrower combined estimate."></canvas>
+      <p class="readout" id="bellOut" aria-live="polite"></p>
+      <div class="knobs" style="border-top:0;padding-top:0">
+        <div class="knob"><div class="row"><label for="b-sp">Filter's doubt about its guess</label><output id="b-sp-o"></output></div><input type="range" id="b-sp" min="2" max="15" step="0.5" value="6"></div>
+        <div class="knob"><div class="row"><label for="b-sr">Sensor noise</label><output id="b-sr-o"></output></div><input type="range" id="b-sr" min="2" max="15" step="0.5" value="5"></div>
+      </div>
+      <p class="hint" style="font-size:13px;color:var(--ink3)">This shows the position half of one step. The real filter keeps position and velocity together, so each reading also corrects its estimate of speed, which is how it finds a quantity the sensor never reports.</p>
+    </div>
+  </div>
+</section>
+
+<section id="build">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Inside the program</p>
+      <h2>Small parts with one job each</h2>
+      <p class="prose">The program is about 1,700 lines of C++ and Python. Each part below is a real file; the code shown is copied from it. Requirement IDs link to the traceability explorer further down.</p>
+    </div>
+    <div class="mods">
+      <div role="tablist" aria-label="Parts of the program" id="modTabs"></div>
+      <div role="tabpanel" id="modPanel" tabindex="0"></div>
+    </div>
+  </div>
+</section>
+
+<section id="proof">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Evidence</p>
+      <h2>How do we know the filter is right?</h2>
+      <p class="prose">"It looked good on one run" proves little, so the filter is checked three independent ways. The third matters most: the 50 seeds below were never used to choose a setting or a threshold.</p>
+    </div>
+    <div class="checks">
+      <div class="check"><span class="n">Check 1 · Reference vector</span><h3>A fixed worked example</h3><p>Unit tests compare the first predict and update with the reference vector in the project baseline (VV-EST-01), which came from an independent prototype (EST-001).</p></div>
+      <div class="check"><span class="n">Check 2 · Independent oracle</span><h3>Same filter, different code</h3><p><span class="mono">kalman_oracle.py</span> rebuilds the estimates from the readings alone, in 60-digit decimal arithmetic, never importing the C++. A test compares the two.</p></div>
+      <div class="check"><span class="n">Check 3 · Held-out seeds</span><h3>50 runs it was never tuned on</h3><p>Seeds 1001 to 1050 were kept apart from tuning. The filter must beat the raw readings on <b>every</b> one, and its error bars must be honest.</p></div>
+      <div class="check"><span class="n">Check 4 · This page</span><h3>The same filter in JavaScript</h3><p id="parity">Checking…</p></div>
+    </div>
+    <div class="charts" id="seedCharts">
+      <div class="chart"><h3>Does the estimate beat the raw readings? (EST-008)</h3><p class="cap" id="cap1"></p><div id="ch1"></div></div>
+      <div class="chart"><h3>Are the error bars honest? (EST-012)</h3><p class="cap" id="cap2"></p><div id="ch2"></div></div>
+      <div class="tip" id="tip2" hidden></div>
+    </div>
+  </div>
+</section>
+
+<section id="trace">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Engineering habits</p>
+      <h2>Every requirement points at a test</h2>
+      <p class="prose" id="traceIntro"></p>
+    </div>
+    <div class="trace">
+      <div class="grid-wrap">
+        <input class="search" id="req-search" type="search" placeholder="Filter by ID or word, for example EST, seed, or units" aria-label="Filter requirements">
+        <div id="reqGrid" style="display:grid;gap:10px"></div>
+        <div class="key"><span><i></i>Must, cited by a test</span><span><i class="opt"></i>Should or Could, cited</span><span><i class="none"></i>No test cites it yet</span></div>
+      </div>
+      <div class="reqbox" id="reqBox" aria-live="polite"></div>
+    </div>
+  </div>
+</section>
+
+<section id="limits">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Stated up front</p>
+      <h2>Where it stops working</h2>
+      <p class="prose">The filter assumes constant speed and a known sensor. When those assumptions are wrong, it gets worse, and the project's validation record says so. These are the measured results on 200 tuning seeds (<a href="https://github.com/giba12/Aerospace/blob/master/docs/VALIDATION.md">VALIDATION.md, section 3</a>). Each button runs the same setting in the demo above.</p>
+    </div>
+    <div class="limits scroll-x">
+      <table>
+        <thead><tr><th>Scenario</th><th class="n">Filter ÷ raw, mean</th><th class="n">Truth in bars</th><th>Ratio ≤ 0.75?</th><th>Bars ≥ 90 %?</th><th>What happens</th><th></th></tr></thead>
+        <tbody id="limRows"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="run">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Reproduce it</p>
+      <h2>One command to see the same results</h2>
+      <p class="prose">The script builds the simulator, runs the reference scenario, prints the metrics and the independent cross-check, and writes the CSV, the metrics file and the plot this page was built from.</p>
+    </div>
+    <div class="runbox">
+      <div class="copyrow">
+        <pre class="code" id="cmd">git clone https://github.com/giba12/Aerospace
+cd Aerospace
+./run.sh              # build, run, analyze, cross-check
+./run.sh --test       # also build and run the whole test suite</pre>
+        <button class="btn" type="button" id="copyCmd">Copy</button>
+      </div>
+      <p class="prose" style="font-size:14px">Needs Linux, a C++ compiler, CMake, Ninja and Python 3.12, or just Docker or Podman. The container build runs the whole test suite before it will produce an image.</p>
+    </div>
+    <h3 style="margin:36px 0 14px">What is automated on every push</h3>
+    <ul class="habits">
+      <li><b>Two compilers</b>GCC 13 and Clang 18, with warnings as errors.</li>
+      <li><b>Sanitizers</b>AddressSanitizer and UndefinedBehaviorSanitizer run the whole suite.</li>
+      <li><b>Traceability gate</b>The build fails if a Must requirement loses its passing test.</li>
+      <li><b>Coverage</b>About 94 % of library lines, measured with gcov; reported, never used as a gate.</li>
+      <li><b>Time budget</b>The full suite must finish inside 30 seconds (NFR-006).</li>
+      <li><b>Clean-room container</b>Builds from a fresh copy, tests inside the image, runs the scenario.</li>
+      <li><b>Claims are tested</b>A test fails if the README quotes a number that a fresh run no longer produces.</li>
+      <li><b>Deterministic</b>The same seed and settings give a byte-identical CSV on the same build.</li>
+    </ul>
+  </div>
+</section>
+</main>
+
+<div class="wrap">
+  <footer>
+    <p>Everything on this page is computed from files in the repository: the recorded run in <span class="mono">out/run.csv</span>, the seed table in <span class="mono">docs/VALIDATION.md</span>, and the requirement and test links found by scanning <span class="mono">docs/</span> and <span class="mono">tests/</span>. <span class="mono">tools/build_demo.py</span> regenerates the page.</p>
+    <p>Educational simulation. Not flight software; not qualified for any use. The in-browser model uses the same equations as the C++ program but its own random-number generator, so live figures differ slightly from the recorded run.</p>
+  </footer>
+</div>
+
+<noscript><div class="wrap"><p class="disclaimer">This page is interactive and needs JavaScript. The results it shows are in the project README.</p></div></noscript>
+
+<script>
+// Browser port of the simulator's maths: Euler truth, seeded noisy sensor, 2-state Kalman filter.
+// It mirrors src/dynamics.cpp, src/sensor.cpp and src/kalman.cpp. The random numbers differ from the
+// C++ program (std::normal_distribution is implementation-defined), so live runs give similar,
+// not identical, figures. Fed the C++ run's own readings, it reproduces the C++ estimates.
+const SimEngine = (() => {
+  function mulberry32(a) {
+    return () => {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function normalSource(seed) {
+    const u = mulberry32(seed >>> 0);
+    return () => {
+      let a = u(); if (a < 1e-12) a = 1e-12;
+      return Math.sqrt(-2 * Math.log(a)) * Math.cos(2 * Math.PI * u());
+    };
+  }
+  const mul = (A, B) => [A[0]*B[0] + A[1]*B[2], A[0]*B[1] + A[1]*B[3], A[2]*B[0] + A[3]*B[2], A[2]*B[1] + A[3]*B[3]];
+  const tr = (A) => [A[0], A[2], A[1], A[3]];
+  const add = (A, B) => A.map((v, i) => v + B[i]);
+
+  // p: { steps, dt, x0, v0, accel, every, sigma, seed, q, r, p0pos, p0vel }
+  // fixedMeas: optional array (null = no reading) that replaces the sensor, to replay recorded readings.
+  function simulate(p, fixedMeas) {
+    const n = p.steps + 1;
+    const out = {
+      n, t: new Float64Array(n), pos: new Float64Array(n), vel: new Float64Array(n),
+      meas: new Float64Array(n).fill(NaN), est: new Float64Array(n).fill(NaN),
+      evel: new Float64Array(n).fill(NaN), evar: new Float64Array(n).fill(NaN),
+      kind: new Uint8Array(n), // 0 = no estimate yet, 1 = predict only, 2 = predict + update (or first reading)
+    };
+    const normal = normalSource(p.seed);
+    let pos = p.x0, vel = p.v0;
+    let x = null, P = null;
+    for (let k = 0; k < n; k++) {
+      if (k > 0) { pos = pos + vel * p.dt; vel = vel + p.accel * p.dt; }
+      out.t[k] = k * p.dt; out.pos[k] = pos; out.vel[k] = vel;
+      let z = NaN;
+      if (fixedMeas) { if (fixedMeas[k] != null) z = fixedMeas[k]; }
+      else if (k % p.every === 0) z = pos + p.sigma * normal();
+      out.meas[k] = z;
+      if (!x) {
+        if (!isNaN(z)) { x = [z, 0]; P = [p.p0pos, 0, 0, p.p0vel]; out.kind[k] = 2; }
+      } else {
+        const dt = p.dt, dt2 = dt * dt, dt3 = dt2 * dt;
+        const F = [1, dt, 0, 1];
+        x = [x[0] + dt * x[1], x[1]];
+        P = add(mul(mul(F, P), tr(F)), [p.q * dt3 / 3, p.q * dt2 / 2, p.q * dt2 / 2, p.q * dt]);
+        out.kind[k] = 1;
+        if (!isNaN(z)) {
+          const S = P[0] + p.r, K = [P[0] / S, P[2] / S], y = z - x[0];
+          x = [x[0] + K[0] * y, x[1] + K[1] * y];
+          const IKH = [1 - K[0], 0, -K[1], 1];
+          const KK = [K[0]*K[0]*p.r, K[0]*K[1]*p.r, K[1]*K[0]*p.r, K[1]*K[1]*p.r];
+          P = add(mul(mul(IKH, P), tr(IKH)), KK);
+          out.kind[k] = 2;
+        }
+      }
+      if (x) { out.est[k] = x[0]; out.evel[k] = x[1]; out.evar[k] = P[0]; }
+    }
+    return out;
+  }
+
+  // Running metrics over steps 0..k, taken at the steps that have a reading (as analyze.py does).
+  function metricsUpTo(s, k) {
+    let n = 0, sm = 0, se = 0, sv = 0, inside = 0;
+    for (let i = 0; i <= k; i++) {
+      if (isNaN(s.meas[i]) || isNaN(s.est[i])) continue;
+      n++;
+      const em = s.meas[i] - s.pos[i], ee = s.est[i] - s.pos[i], ev = s.evel[i] - s.vel[i];
+      sm += em * em; se += ee * ee; sv += ev * ev;
+      if (Math.abs(ee) <= 2 * Math.sqrt(s.evar[i])) inside++;
+    }
+    if (!n) return null;
+    const rm = Math.sqrt(sm / n), re = Math.sqrt(se / n);
+    return { n, rmseMeas: rm, rmseEst: re, rmseVel: Math.sqrt(sv / n), ratio: rm > 0 ? re / rm : NaN, coverage: inside / n };
+  }
+
+  return { simulate, metricsUpTo };
+})();
+if (typeof module !== 'undefined') module.exports = SimEngine;
+
+</script>
+<script>
+"use strict";
+const DATA = {"run":{"config":{"steps":1000,"dt_s":0.1,"x0_m":0,"v0_mps":10,"accel_mps2":0,"meas_every":5,"sigma_m":5,"seed":42,"est_q_m2ps3":0.1,"est_r_m2":25,"est_p0_pos_m2":25,"est_p0_vel_m2ps2":100,"compiler":"gcc 13.3.0"},"meas":[3.524941,null,null,null,null,11.469102,null,null,null,null,7.129526,null,null,null,null,16.989887,null,null,null,null,10.466573,null,null,null,null,30.592775,null,null,null,null,26.379385,null,null,null,null,27.538765,null,null,null,null,40.075064,null,null,null,null,43.455957,null,null,null,null,55.238512,null,null,null,null,62.066834,null,null,null,null,58.392937,null,null,null,null,72.96607,null,null,null,null,66.810013,null,null,null,null,77.252326,null,null,null,null,75.53748,null,null,null,null,84.166023,null,null,null,null,77.381516,null,null,null,null,102.073758,null,null,null,null,97.845385,null,null,null,null,106.558354,null,null,null,null,105.854573,null,null,null,null,120.7666,null,null,null,null,123.756469,null,null,null,null,128.097793,null,null,null,null,127.347898,null,null,null,null,142.697086,null,null,null,null,138.116534,null,null,null,null,154.280824,null,null,null,null,145.378279,null,null,null,null,170.324639,null,null,null,null,162.428866,null,null,null,null,158.466568,null,null,null,null,157.943465,null,null,null,null,174.280673,null,null,null,null,175.545502,null,null,null,null,193.859294,null,null,null,null,185.699536,null,null,null,null,194.310452,null,null,null,null,186.515319,null,null,null,null,199.638288,null,null,null,null,216.088353,null,null,null,null,224.436392,null,null,null,null,219.61904,null,null,null,null,230.668211,null,null,null,null,229.832885,null,null,null,null,241.587637,null,null,null,null,230.757136,null,null,null,null,242.305008,null,null,null,null,251.05605,null,null,null,null,245.596636,null,null,null,null,266.43606,null,null,null,null,261.703164,null,null,null,null,275.439407,null,null,null,null,269.313219,null,null,null,null,284.259544,null,null,null,null,291.474685,null,null,null,null,292.667318,null,null,null,null,297.937928,null,null,null,null,305.706414,null,null,null,null,307.953559,null,null,null,null,313.255396,null,null,null,null,314.273478,null,null,null,null,313.402733,null,null,null,null,319.991755,null,null,null,null,333.001076,null,null,null,null,342.612376,null,null,null,null,335.389471,null,null,null,null,343.119654,null,null,null,null,356.452021,null,null,null,null,363.674845,null,null,null,null,371.908177,null,null,null,null,367.279249,null,null,null,null,369.170747,null,null,null,null,372.252373,null,null,null,null,383.46352,null,null,null,null,392.293456,null,null,null,null,393.324327,null,null,null,null,394.196601,null,null,null,null,395.75085,null,null,null,null,408.788921,null,null,null,null,404.708894,null,null,null,null,415.409614,null,null,null,null,416.640721,null,null,null,null,428.641213,null,null,null,null,424.974594,null,null,null,null,434.636801,null,null,null,null,436.277423,null,null,null,null,446.921721,null,null,null,null,453.642157,null,null,null,null,462.652587,null,null,null,null,466.196111,null,null,null,null,461.681621,null,null,null,null,462.065769,null,null,null,null,468.247153,null,null,null,null,482.513899,null,null,null,null,488.152957,null,null,null,null,493.989565,null,null,null,null,496.651703,null,null,null,null,499.043957,null,null,null,null,502.634279,null,null,null,null,506.636506,null,null,null,null,506.669634,null,null,null,null,521.083776,null,null,null,null,523.954104,null,null,null,null,520.696151,null,null,null,null,534.370893,null,null,null,null,538.576318,null,null,null,null,551.365136,null,null,null,null,550.530574,null,null,null,null,555.384126,null,null,null,null,559.102309,null,null,null,null,565.51083,null,null,null,null,572.694239,null,null,null,null,568.917064,null,null,null,null,570.35094,null,null,null,null,581.69912,null,null,null,null,596.82705,null,null,null,null,590.215595,null,null,null,null,606.11423,null,null,null,null,600.928642,null,null,null,null,612.272525,null,null,null,null,609.977631,null,null,null,null,619.105307,null,null,null,null,621.235588,null,null,null,null,631.31602,null,null,null,null,623.875988,null,null,null,null,646.01457,null,null,null,null,649.653397,null,null,null,null,667.510514,null,null,null,null,656.356534,null,null,null,null,666.537932,null,null,null,null,662.698328,null,null,null,null,667.375951,null,null,null,null,669.546813,null,null,null,null,675.924909,null,null,null,null,685.530299,null,null,null,null,688.102564,null,null,null,null,687.508074,null,null,null,null,692.502348,null,null,null,null,704.289774,null,null,null,null,708.808953,null,null,null,null,718.996551,null,null,null,null,710.723215,null,null,null,null,724.212279,null,null,null,null,720.600139,null,null,null,null,732.645864,null,null,null,null,737.91146,null,null,null,null,736.097844,null,null,null,null,747.240558,null,null,null,null,755.890685,null,null,null,null,749.022162,null,null,null,null,765.7918,null,null,null,null,767.985164,null,null,null,null,782.517789,null,null,null,null,773.223121,null,null,null,null,789.101198,null,null,null,null,787.973757,null,null,null,null,801.583547,null,null,null,null,801.487606,null,null,null,null,801.600132,null,null,null,null,811.006831,null,null,null,null,811.764265,null,null,null,null,813.724285,null,null,null,null,826.443382,null,null,null,null,829.321534,null,null,null,null,839.877559,null,null,null,null,839.523672,null,null,null,null,849.356442,null,null,null,null,848.363437,null,null,null,null,861.30973,null,null,null,null,850.894463,null,null,null,null,861.310761,null,null,null,null,872.400102,null,null,null,null,873.358056,null,null,null,null,872.930997,null,null,null,null,883.651078,null,null,null,null,888.267917,null,null,null,null,893.210016,null,null,null,null,890.458124,null,null,null,null,898.391316,null,null,null,null,903.619352,null,null,null,null,912.884549,null,null,null,null,917.661886,null,null,null,null,920.206791,null,null,null,null,932.125577,null,null,null,null,939.867146,null,null,null,null,942.65809,null,null,null,null,943.913728,null,null,null,null,957.051934,null,null,null,null,946.331729,null,null,null,null,946.440572,null,null,null,null,966.366933,null,null,null,null,972.957664,null,null,null,null,975.900518,null,null,null,null,978.525672,null,null,null,null,978.703121,null,null,null,null,992.331411,null,null,null,null,1000.325714,null,null,null,null,1003.700058],"est":[3.524941,3.524941,3.524941,3.524941,3.524941,8.821196,9.350909,9.880623,10.410337,10.94005,8.575951,8.816187,9.056422,9.296658,9.536894,14.286136,14.887347,15.488559,16.089771,16.690982,13.443229,13.795737,14.148246,14.500754,14.853263,22.975812,23.745878,24.515944,25.28601,26.056076,26.623317,27.384069,28.144822,28.905574,29.666326,29.239566,29.952676,30.665785,31.378895,32.092004,35.533565,36.344087,37.154608,37.96513,38.775652,40.922217,41.775855,42.629492,43.483129,44.336766,48.405061,49.353758,50.302455,51.251152,52.199849,55.810601,56.832319,57.854037,58.875755,59.897473,60.211098,61.214595,62.218093,63.221591,64.225089,67.27756,68.331029,69.384497,70.437966,71.491434,71.101783,72.121575,73.141368,74.16116,75.180952,76.453596,77.479084,78.504571,79.530058,80.555546,80.185123,81.180025,82.174928,83.16983,84.164733,84.938066,85.928213,86.91836,87.908508,88.898655,87.183284,88.11622,89.049156,89.982093,90.915029,94.003283,94.981348,95.959413,96.937478,97.915542,98.677444,99.65101,100.624575,101.598141,102.571706,104.155479,105.141708,106.127938,107.114168,108.100397,108.441658,109.414511,110.387365,111.360218,112.333071,114.777261,115.780654,116.784047,117.78744,118.790833,120.568423,121.587914,122.607405,123.626897,124.646388,126.137688,127.167011,128.196335,129.225659,130.254982,130.524688,131.538143,132.551598,133.565053,134.578508,136.957697,137.999749,139.041801,140.083853,141.125905,141.391368,142.417125,143.442882,144.468638,145.494395,148.004888,149.061856,150.118824,151.175791,152.232759,151.77807,152.803214,153.828357,154.853501,155.878644,159.466077,160.545226,161.624376,162.703525,163.782674,164.397549,165.466904,166.536259,167.605615,168.67497,167.592784,168.616723,169.640663,170.664602,171.688542,169.895242,170.85969,171.824139,172.788587,173.753035,174.634165,175.596853,176.559541,177.52223,178.484918,178.703313,179.650279,180.597245,181.544211,182.491177,185.42589,186.414846,187.403802,188.392757,189.381713,189.479692,190.449828,191.419963,192.390098,193.360234,194.32657,195.296625,196.26668,197.236736,198.206791,196.761875,197.680928,198.59998,199.519032,200.438085,201.029309,201.941439,202.853568,203.765698,204.677827,207.592166,208.546573,209.500979,210.455386,211.409792,214.666425,215.669439,216.672452,217.675466,218.67848,219.669584,220.672347,221.675109,222.677871,223.680634,225.824592,226.851445,227.878298,228.905152,229.932005,230.744168,231.766489,232.788811,233.811132,234.833453,236.948614,237.994003,239.039393,240.084782,241.130172,239.998627,240.998066,241.997505,242.996944,243.996383,244.482838,245.471449,246.46006,247.448671,248.437282,249.736659,250.731829,251.727,252.72217,253.71734,252.974754,253.933245,254.891736,255.850227,256.808718,259.419707,260.413078,261.406449,262.39982,263.393191,263.87505,264.857624,265.840198,266.822772,267.805347,270.055813,271.065149,272.074485,273.083822,274.093158,273.998968,274.985012,275.971055,276.957099,277.943142,279.945225,280.952715,281.960205,282.967694,283.975184,286.220133,287.253742,288.287352,289.320962,290.354571,291.631999,292.670756,293.709512,294.748268,295.787024,297.037768,298.080999,299.12423,300.16746,301.210691,302.912004,303.969125,305.026247,306.083368,307.14049,308.151092,309.207232,310.263372,311.319511,312.375651,313.398168,314.453598,315.509028,316.564458,317.619888,317.836282,318.874002,319.911722,320.949441,321.987161,321.190802,322.189807,323.188813,324.187818,325.186824,325.005176,325.979261,326.953345,327.927429,328.901514,330.471346,331.458005,332.444664,333.431324,334.417983,336.778509,337.794168,338.809827,339.825486,340.841146,340.624066,341.613704,342.603342,343.592981,344.582619,345.104766,346.084537,347.064307,348.044078,349.023848,351.232749,352.238464,353.244179,354.249894,355.255609,357.674416,358.709959,359.745502,360.781044,361.816587,364.578303,365.650282,366.722261,367.79424,368.866219,369.431376,370.492657,371.553938,372.615219,373.676499,373.676648,374.715531,375.754413,376.793296,377.832178,377.609472,378.621725,379.633978,380.646231,381.658484,382.821849,383.837291,384.852734,385.868176,386.883618,388.736676,389.769799,390.802922,391.836045,392.869168,393.792125,394.822923,395.85372,396.884518,397.915315,398.040809,399.052497,400.064185,401.075874,402.087562,401.698572,402.680695,403.662818,404.64494,405.627063,407.024665,408.015557,409.00645,409.997343,410.988235,410.593349,411.554991,412.516633,413.478274,414.439916,415.403093,416.364767,417.326441,418.288115,419.249789,419.530844,420.478151,421.425459,422.372766,423.320074,425.101076,426.065982,427.030887,427.995792,428.960697,428.981891,429.926876,430.871861,431.816847,432.761832,433.884081,434.832808,435.781535,436.730262,437.678989,438.179727,439.118997,440.058268,440.997539,441.936809,443.647219,444.602767,445.558315,446.513863,447.469411,449.419408,450.395947,451.372486,452.349025,453.325564,455.893787,456.903924,457.91406,458.924196,459.934332,461.945484,462.976749,464.008015,465.039281,466.070547,466.068671,467.078129,468.087587,469.097045,470.106503,469.390905,470.363951,471.336996,472.310042,473.283088,473.110762,474.059631,475.0085,475.957369,476.906238,478.743119,479.710732,480.678345,481.645958,482.613572,484.45261,485.438617,486.424624,487.410631,488.396639,490.26077,491.265313,492.269856,493.274398,494.278941,495.54428,496.554328,497.564375,498.574423,499.584471,500.298966,501.302775,502.306584,503.310393,504.314203,504.806466,505.799477,506.792489,507.7855,508.778511,509.173958,510.154356,511.134754,512.115152,513.09555,512.664231,513.61483,514.56543,515.516029,516.466628,518.116108,519.081459,520.046811,521.012162,521.977513,523.135617,524.105037,525.074457,526.043877,527.013297,526.593826,527.533929,528.474032,529.414135,530.354238,531.880762,532.833244,533.785725,534.738206,535.690688,537.011646,537.971906,538.932165,539.892424,540.852683,543.633685,544.632376,545.631068,546.629759,547.628451,548.989955,549.996305,551.002655,552.009005,553.015355,554.281396,555.293227,556.305058,557.31689,558.328721,559.295141,560.306014,561.316887,562.32776,563.338633,564.570865,565.586411,566.601956,567.617501,568.633047,570.229122,571.256922,572.284721,573.31252,574.340319,574.138484,575.140328,576.142172,577.144016,578.14586,577.470954,578.437405,579.403856,580.370307,581.336759,582.188064,583.152085,584.116105,585.080126,586.044146,588.879743,589.883269,590.886795,591.89032,592.893846,593.195589,594.184302,595.173015,596.161727,597.15044,599.659281,600.68008,601.70088,602.72168,603.742479,604.032359,605.03773,606.043102,607.048473,608.053844,609.671704,610.690004,611.708304,612.726603,613.744903,613.851026,614.850071,615.849117,616.848162,617.847208,618.895631,619.895719,620.895807,621.895895,622.895982,623.388956,624.37834,625.367723,626.357107,627.34649,628.903919,629.905293,630.906667,631.908041,632.909414,631.998057,632.959056,633.920056,634.881056,635.842056,638.558861,639.556922,640.554984,641.553045,642.551107,644.712694,645.735316,646.757937,647.780558,648.803179,653.196681,654.290455,655.384229,656.478003,657.571777,658.22543,659.309914,660.394398,661.478882,662.563366,664.198728,665.29484,666.390952,667.487063,668.583175,668.348648,669.416672,670.484697,671.552722,672.620746,672.485485,673.528111,674.570737,675.613362,676.655988,676.1448,677.154628,678.164455,679.174283,680.184111,680.189609,681.178238,682.166866,683.155494,684.144122,685.208527,686.198755,687.188982,688.17921,689.169438,689.767561,690.749513,691.731464,692.713415,693.695366,693.310789,694.263895,695.217001,696.170108,697.123214,697.013866,697.944546,698.875226,699.805906,700.736586,702.167142,703.108373,704.049605,704.990836,705.932068,707.242254,708.191273,709.140292,710.089312,711.038331,713.323373,714.300593,715.277813,716.255034,717.232254,716.782519,717.729619,718.676719,719.623819,720.570919,722.031572,722.989512,723.947452,724.905392,725.863332,725.635463,726.568372,727.501282,728.434192,729.367102,730.747154,731.689503,732.631851,733.574199,734.516547,735.926378,736.878594,737.83081,738.783026,739.735242,739.812632,740.746382,741.680132,742.613882,743.547632,745.007308,745.952159,746.897011,747.841862,748.786713,750.905554,751.875185,752.844817,753.814449,754.784081,754.470613,755.413161,756.355709,757.298258,758.240806,760.442989,761.412125,762.381262,763.350399,764.319535,765.80265,766.782636,767.762621,768.742607,769.722593,772.954674,773.982197,775.00972,776.037243,777.064766,777.164178,778.17211,779.180043,780.187975,781.195908,783.518545,784.554228,785.589911,786.625595,787.661278,788.559111,789.591885,790.624659,791.657432,792.690206,795.221281,796.285681,797.350081,798.41448,799.47888,800.723278,801.791477,802.859676,803.927876,804.996075,805.213365,806.263603,807.313841,808.364079,809.414317,810.567919,811.620339,812.672759,813.725179,814.777599,815.055046,816.091108,817.12717,818.163231,819.199293,818.994281,820.004146,821.014011,822.023876,823.033741,824.501027,825.520548,826.540068,827.559589,828.579109,829.545812,830.564218,831.582623,832.601029,833.619434,835.636582,836.676069,837.715556,838.755043,839.79453,840.584253,841.618468,842.652683,843.686898,844.721113,846.441736,847.490439,848.539143,849.587847,850.636551,851.052083,852.087422,853.122761,854.158099,855.193438,857.197257,858.253038,859.308819,860.364601,861.420382,860.268578,861.277761,862.286945,863.296128,864.305312,864.551344,865.544419,866.537494,867.530569,868.523644,870.06632,871.070996,872.075672,873.080348,874.085024,874.759632,875.75734,876.755049,877.752758,878.750467,878.448754,879.419035,880.389316,881.359596,882.329877,883.367046,884.338739,885.310431,886.282124,887.253816,888.233592,889.205455,890.177318,891.149181,892.121044,893.115229,894.087564,895.059898,896.032232,897.004566,896.543748,897.485831,898.427914,899.369997,900.312081,900.708477,901.639042,902.569606,903.500171,904.430736,905.029268,905.952824,906.87638,907.799937,908.723493,910.264148,911.20073,912.137312,913.073894,914.010476,915.464531,916.412036,917.359541,918.307046,919.25455,920.202958,921.150482,922.098006,923.04553,923.993054,926.310109,927.286541,928.262973,929.239405,930.215837,932.845786,933.857121,934.868456,935.87979,936.891125,938.808929,939.839398,940.869866,941.900335,942.930803,943.952209,944.982487,946.012764,947.043041,948.073318,950.618627,951.680883,952.74314,953.805397,954.867653,954.100402,955.124041,956.14768,957.17132,958.194959,956.78298,957.755208,958.727436,959.699664,960.671892,962.544335,963.535565,964.526794,965.518024,966.509254,968.540676,969.553862,970.567049,971.580235,972.593421,974.043849,975.066265,976.08868,977.111096,978.133512,979.035794,980.055674,981.075554,982.095434,983.115313,983.099787,984.097811,985.095836,986.09386,987.091884,988.898381,989.913471,990.92856,991.94365,992.95874,995.184561,996.225207,997.265853,998.306499,999.347145,1001.019141],"vel":[0.0,0.0,0.0,0.0,0.0,5.297137,5.297137,5.297137,5.297137,5.297137,2.402359,2.402359,2.402359,2.402359,2.402359,6.012117,6.012117,6.012117,6.012117,6.012117,3.525085,3.525085,3.525085,3.525085,3.525085,7.70066,7.70066,7.70066,7.70066,7.70066,7.607523,7.607523,7.607523,7.607523,7.607523,7.131095,7.131095,7.131095,7.131095,7.131095,8.105216,8.105216,8.105216,8.105216,8.105216,8.536372,8.536372,8.536372,8.536372,8.536372,9.486969,9.486969,9.486969,9.486969,9.486969,10.217182,10.217182,10.217182,10.217182,10.217182,10.034978,10.034978,10.034978,10.034978,10.034978,10.534685,10.534685,10.534685,10.534685,10.534685,10.197923,10.197923,10.197923,10.197923,10.197923,10.254874,10.254874,10.254874,10.254874,10.254874,9.949025,9.949025,9.949025,9.949025,9.949025,9.901474,9.901474,9.901474,9.901474,9.901474,9.329363,9.329363,9.329363,9.329363,9.329363,9.780648,9.780648,9.780648,9.780648,9.780648,9.735655,9.735655,9.735655,9.735655,9.735655,9.862297,9.862297,9.862297,9.862297,9.862297,9.728533,9.728533,9.728533,9.728533,9.728533,10.033932,10.033932,10.033932,10.033932,10.033932,10.194912,10.194912,10.194912,10.194912,10.194912,10.293236,10.293236,10.293236,10.293236,10.293236,10.134552,10.134552,10.134552,10.134552,10.134552,10.420521,10.420521,10.420521,10.420521,10.420521,10.257568,10.257568,10.257568,10.257568,10.257568,10.569679,10.569679,10.569679,10.569679,10.569679,10.251435,10.251435,10.251435,10.251435,10.251435,10.791493,10.791493,10.791493,10.791493,10.791493,10.693552,10.693552,10.693552,10.693552,10.693552,10.239396,10.239396,10.239396,10.239396,10.239396,9.644483,9.644483,9.644483,9.644483,9.644483,9.626884,9.626884,9.626884,9.626884,9.626884,9.46966,9.46966,9.46966,9.46966,9.46966,9.889557,9.889557,9.889557,9.889557,9.889557,9.701353,9.701353,9.701353,9.701353,9.701353,9.700551,9.700551,9.700551,9.700551,9.700551,9.190524,9.190524,9.190524,9.190524,9.190524,9.121296,9.121296,9.121296,9.121296,9.121296,9.544064,9.544064,9.544064,9.544064,9.544064,10.030138,10.030138,10.030138,10.030138,10.030138,10.027623,10.027623,10.027623,10.027623,10.027623,10.268533,10.268533,10.268533,10.268533,10.268533,10.223213,10.223213,10.223213,10.223213,10.223213,10.453895,10.453895,10.453895,10.453895,10.453895,9.994389,9.994389,9.994389,9.994389,9.994389,9.88611,9.88611,9.88611,9.88611,9.88611,9.951705,9.951705,9.951705,9.951705,9.951705,9.58491,9.58491,9.58491,9.58491,9.58491,9.933709,9.933709,9.933709,9.933709,9.933709,9.825742,9.825742,9.825742,9.825742,9.825742,10.093362,10.093362,10.093362,10.093362,10.093362,9.860434,9.860434,9.860434,9.860434,9.860434,10.074897,10.074897,10.074897,10.074897,10.074897,10.336097,10.336097,10.336097,10.336097,10.336097,10.387562,10.387562,10.387562,10.387562,10.387562,10.432308,10.432308,10.432308,10.432308,10.432308,10.571216,10.571216,10.571216,10.571216,10.571216,10.561397,10.561397,10.561397,10.561397,10.561397,10.554299,10.554299,10.554299,10.554299,10.554299,10.377195,10.377195,10.377195,10.377195,10.377195,9.990056,9.990056,9.990056,9.990056,9.990056,9.740843,9.740843,9.740843,9.740843,9.740843,9.866594,9.866594,9.866594,9.866594,9.866594,10.156591,10.156591,10.156591,10.156591,10.156591,9.896383,9.896383,9.896383,9.896383,9.896383,9.797705,9.797705,9.797705,9.797705,9.797705,10.057151,10.057151,10.057151,10.057151,10.057151,10.355427,10.355427,10.355427,10.355427,10.355427,10.71979,10.71979,10.71979,10.71979,10.71979,10.612809,10.612809,10.612809,10.612809,10.612809,10.388824,10.388824,10.388824,10.388824,10.388824,10.122528,10.122528,10.122528,10.122528,10.122528,10.154424,10.154424,10.154424,10.154424,10.154424,10.331229,10.331229,10.331229,10.331229,10.331229,10.307975,10.307975,10.307975,10.307975,10.307975,10.116883,10.116883,10.116883,10.116883,10.116883,9.821227,9.821227,9.821227,9.821227,9.821227,9.908926,9.908926,9.908926,9.908926,9.908926,9.616415,9.616415,9.616415,9.616415,9.616415,9.616739,9.616739,9.616739,9.616739,9.616739,9.473074,9.473074,9.473074,9.473074,9.473074,9.649051,9.649051,9.649051,9.649051,9.649051,9.449852,9.449852,9.449852,9.449852,9.449852,9.487269,9.487269,9.487269,9.487269,9.487269,9.392707,9.392707,9.392707,9.392707,9.392707,9.55548,9.55548,9.55548,9.55548,9.55548,9.765389,9.765389,9.765389,9.765389,9.765389,10.101363,10.101363,10.101363,10.101363,10.101363,10.312658,10.312658,10.312658,10.312658,10.312658,10.094581,10.094581,10.094581,10.094581,10.094581,9.730455,9.730455,9.730455,9.730455,9.730455,9.48869,9.48869,9.48869,9.48869,9.48869,9.676132,9.676132,9.676132,9.676132,9.676132,9.860073,9.860073,9.860073,9.860073,9.860073,10.045428,10.045428,10.045428,10.045428,10.045428,10.100477,10.100477,10.100477,10.100477,10.100477,10.038091,10.038091,10.038091,10.038091,10.038091,9.930114,9.930114,9.930114,9.930114,9.930114,9.803979,9.803979,9.803979,9.803979,9.803979,9.505993,9.505993,9.505993,9.505993,9.505993,9.653513,9.653513,9.653513,9.653513,9.653513,9.6942,9.6942,9.6942,9.6942,9.6942,9.401032,9.401032,9.401032,9.401032,9.401032,9.524814,9.524814,9.524814,9.524814,9.524814,9.602592,9.602592,9.602592,9.602592,9.602592,9.986916,9.986916,9.986916,9.986916,9.986916,10.063499,10.063499,10.063499,10.063499,10.063499,10.118314,10.118314,10.118314,10.118314,10.118314,10.108729,10.108729,10.108729,10.108729,10.108729,10.155454,10.155454,10.155454,10.155454,10.155454,10.277992,10.277992,10.277992,10.277992,10.277992,10.01844,10.01844,10.01844,10.01844,10.01844,9.664511,9.664511,9.664511,9.664511,9.664511,9.640206,9.640206,9.640206,9.640206,9.640206,10.035259,10.035259,10.035259,10.035259,10.035259,9.887126,9.887126,9.887126,9.887126,9.887126,10.207996,10.207996,10.207996,10.207996,10.207996,10.053713,10.053713,10.053713,10.053713,10.053713,10.182998,10.182998,10.182998,10.182998,10.182998,9.990455,9.990455,9.990455,9.990455,9.990455,10.000877,10.000877,10.000877,10.000877,10.000877,9.893835,9.893835,9.893835,9.893835,9.893835,10.013739,10.013739,10.013739,10.013739,10.013739,9.609998,9.609998,9.609998,9.609998,9.609998,9.980615,9.980615,9.980615,9.980615,9.980615,10.226213,10.226213,10.226213,10.226213,10.226213,10.937741,10.937741,10.937741,10.937741,10.937741,10.844839,10.844839,10.844839,10.844839,10.844839,10.961119,10.961119,10.961119,10.961119,10.961119,10.680247,10.680247,10.680247,10.680247,10.680247,10.426256,10.426256,10.426256,10.426256,10.426256,10.098276,10.098276,10.098276,10.098276,10.098276,9.886282,9.886282,9.886282,9.886282,9.886282,9.902277,9.902277,9.902277,9.902277,9.902277,9.819511,9.819511,9.819511,9.819511,9.819511,9.531063,9.531063,9.531063,9.531063,9.531063,9.3068,9.3068,9.3068,9.3068,9.3068,9.412314,9.412314,9.412314,9.412314,9.412314,9.490193,9.490193,9.490193,9.490193,9.490193,9.772202,9.772202,9.772202,9.772202,9.772202,9.470999,9.470999,9.470999,9.470999,9.470999,9.5794,9.5794,9.5794,9.5794,9.5794,9.329099,9.329099,9.329099,9.329099,9.329099,9.423482,9.423482,9.423482,9.423482,9.423482,9.522159,9.522159,9.522159,9.522159,9.522159,9.3375,9.3375,9.3375,9.3375,9.3375,9.448513,9.448513,9.448513,9.448513,9.448513,9.696319,9.696319,9.696319,9.696319,9.696319,9.425481,9.425481,9.425481,9.425481,9.425481,9.691366,9.691366,9.691366,9.691366,9.691366,9.799857,9.799857,9.799857,9.799857,9.799857,10.275231,10.275231,10.275231,10.275231,10.275231,10.079325,10.079325,10.079325,10.079325,10.079325,10.356833,10.356833,10.356833,10.356833,10.356833,10.327736,10.327736,10.327736,10.327736,10.327736,10.643998,10.643998,10.643998,10.643998,10.643998,10.681993,10.681993,10.681993,10.681993,10.681993,10.502382,10.502382,10.502382,10.502382,10.502382,10.5242,10.5242,10.5242,10.5242,10.5242,10.360618,10.360618,10.360618,10.360618,10.360618,10.098651,10.098651,10.098651,10.098651,10.098651,10.195204,10.195204,10.195204,10.195204,10.195204,10.184055,10.184055,10.184055,10.184055,10.184055,10.394871,10.394871,10.394871,10.394871,10.394871,10.34215,10.34215,10.34215,10.34215,10.34215,10.487037,10.487037,10.487037,10.487037,10.487037,10.353387,10.353387,10.353387,10.353387,10.353387,10.557815,10.557815,10.557815,10.557815,10.557815,10.091836,10.091836,10.091836,10.091836,10.091836,9.930749,9.930749,9.930749,9.930749,9.930749,10.046759,10.046759,10.046759,10.046759,10.046759,9.977088,9.977088,9.977088,9.977088,9.977088,9.702806,9.702806,9.702806,9.702806,9.702806,9.716925,9.716925,9.716925,9.716925,9.716925,9.718631,9.718631,9.718631,9.718631,9.718631,9.723343,9.723343,9.723343,9.723343,9.723343,9.420832,9.420832,9.420832,9.420832,9.420832,9.305648,9.305648,9.305648,9.305648,9.305648,9.235562,9.235562,9.235562,9.235562,9.235562,9.36582,9.36582,9.36582,9.36582,9.36582,9.475048,9.475048,9.475048,9.475048,9.475048,9.475239,9.475239,9.475239,9.475239,9.475239,9.764321,9.764321,9.764321,9.764321,9.764321,10.113346,10.113346,10.113346,10.113346,10.113346,10.304685,10.304685,10.304685,10.304685,10.304685,10.302772,10.302772,10.302772,10.302772,10.302772,10.622566,10.622566,10.622566,10.622566,10.622566,10.236392,10.236392,10.236392,10.236392,10.236392,9.72228,9.72228,9.72228,9.72228,9.72228,9.912298,9.912298,9.912298,9.912298,9.912298,10.131862,10.131862,10.131862,10.131862,10.131862,10.224156,10.224156,10.224156,10.224156,10.224156,10.198798,10.198798,10.198798,10.198798,10.198798,9.980244,9.980244,9.980244,9.980244,9.980244,10.150897,10.150897,10.150897,10.150897,10.150897,10.406459,10.406459,10.406459,10.406459,10.406459,10.539725],"var":[25.0,26.000033,29.000267,34.0009,41.002133,16.66713,20.668163,26.003433,32.67314,40.677485,16.668518,20.337181,24.673673,29.678194,35.350945,15.628579,18.298227,21.302618,24.641953,28.316432,14.097491,16.011024,18.108083,20.38887,22.853584,12.624357,14.036214,15.558216,17.190564,18.933457,11.349866,12.427838,13.577157,14.798023,16.090634,10.278596,11.127901,12.02645,12.974441,13.972076,9.382635,10.070468,10.794175,11.553955,12.350007,8.631259,9.201968,9.800072,10.425768,11.079258,7.998167,8.482029,8.987705,9.515394,10.065296,7.462349,7.880691,8.317067,8.771679,9.244725,7.00735,7.375613,7.759298,8.158603,8.57373,6.620284,6.949922,7.293145,7.650152,8.021143,6.290965,6.590647,6.902609,7.227052,7.564175,6.011223,6.287619,6.575365,6.874661,7.185706,5.774378,6.032691,6.301689,6.581571,6.872538,5.574853,5.819179,6.073715,6.338662,6.61422,5.407885,5.641467,5.884925,6.138459,6.402268,5.269318,5.494733,5.729789,5.974687,6.229627,5.15546,5.374748,5.603518,5.841969,6.090302,5.062979,5.277753,5.5019,5.735621,5.979116,4.988848,5.200366,5.421189,5.651515,5.891545,4.930304,5.139541,5.358037,5.585994,5.823611,4.884837,5.09253,5.309457,5.535819,5.771815,4.850179,5.056877,5.272796,5.498135,5.733095,4.82431,5.03041,5.245725,5.470453,5.704794,4.805453,5.011234,5.226225,5.450627,5.68464,4.792077,4.997722,5.212576,5.436841,5.670716,4.782885,4.988508,5.203342,5.427586,5.66144,4.776803,4.98247,5.197347,5.421634,5.655531,4.772964,4.978703,5.193651,5.418009,5.651977,4.770682,4.9765,5.191525,5.415958,5.65,4.769435,4.975322,5.190415,5.414914,5.649019,4.768834,4.974774,5.189919,5.414466,5.648617,4.768599,4.974575,5.189752,5.414329,5.648507,4.768543,4.974536,5.189726,5.414314,5.6485,4.768541,4.974536,5.189724,5.414308,5.648485,4.768524,4.974507,5.189681,5.414247,5.648404,4.768456,4.974417,5.189568,5.414107,5.648235,4.768324,4.974259,5.18938,5.413887,5.64798,4.768133,4.974037,5.189126,5.413598,5.647654,4.767894,4.973767,5.188822,5.41326,5.647279,4.767623,4.973466,5.188489,5.412893,5.646878,4.767336,4.973151,5.188145,5.412518,5.64647,4.767047,4.972837,5.187805,5.41215,5.646074,4.766768,4.972536,5.187481,5.411804,5.645703,4.766509,4.972258,5.187184,5.411487,5.645366,4.766274,4.972009,5.186919,5.411205,5.645068,4.766068,4.97179,5.186688,5.410962,5.644811,4.765891,4.971603,5.186492,5.410756,5.644595,4.765742,4.971448,5.186329,5.410585,5.644417,4.765621,4.971321,5.186197,5.410448,5.644274,4.765523,4.97122,5.186092,5.410339,5.644161,4.765447,4.971141,5.18601,5.410255,5.644075,4.765388,4.971081,5.185949,5.410192,5.64401,4.765345,4.971036,5.185903,5.410145,5.643962,4.765313,4.971004,5.185871,5.410112,5.643929,4.765291,4.970982,5.185848,5.410089,5.643906,4.765275,4.970966,5.185833,5.410074,5.64389,4.765265,4.970957,5.185823,5.410064,5.643881,4.765259,4.97095,5.185817,5.410058,5.643875,4.765256,4.970947,5.185814,5.410055,5.643872,4.765254,4.970945,5.185812,5.410054,5.643871,4.765253,4.970944,5.185811,5.410053,5.64387,4.765252,4.970944,5.185811,5.410053,5.64387,4.765252,4.970944,5.185811,5.410053,5.64387,4.765252,4.970944,5.185811,5.410053,5.64387,4.765252,4.970944,5.185811,5.410053,5.64387,4.765252,4.970944,5.185811,5.410052,5.643869,4.765252,4.970944,5.18581,5.410052,5.643869,4.765252,4.970943,5.18581,5.410051,5.643868,4.765251,4.970943,5.185809,5.410051,5.643867,4.765251,4.970942,5.185809,5.41005,5.643867,4.76525,4.970941,5.185808,5.410049,5.643866,4.765249,4.970941,5.185807,5.410049,5.643865,4.765249,4.97094,5.185807,5.410048,5.643865,4.765248,4.97094,5.185806,5.410048,5.643864,4.765248,4.970939,5.185806,5.410047,5.643863,4.765248,4.970939,5.185805,5.410047,5.643863,4.765247,4.970939,5.185805,5.410046,5.643863,4.765247,4.970938,5.185805,5.410046,5.643862,4.765247,4.970938,5.185804,5.410046,5.643862,4.765247,4.970938,5.185804,5.410045,5.643862,4.765247,4.970938,5.185804,5.410045,5.643862,4.765246,4.970938,5.185804,5.410045,5.643862,4.765246,4.970938,5.185804,5.410045,5.643861,4.765246,4.970938,5.185804,5.410045,5.643861,4.765246,4.970938,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246,4.970937,5.185804,5.410045,5.643861,4.765246]},"seeds":[[1001,4.776,2.023,0.424,0.97],[1002,4.915,1.968,0.4,0.96],[1003,4.835,1.898,0.393,0.995],[1004,5.143,1.8,0.35,0.995],[1005,4.855,1.52,0.313,1.0],[1006,4.739,1.937,0.409,1.0],[1007,4.957,2.124,0.429,0.97],[1008,4.795,1.807,0.377,1.0],[1009,4.758,1.803,0.379,0.995],[1010,4.698,2.233,0.475,0.985],[1011,4.912,2.016,0.41,0.955],[1012,5.107,2.347,0.46,0.965],[1013,4.678,1.832,0.392,0.995],[1014,5.075,1.905,0.375,0.975],[1015,4.975,2.321,0.466,0.96],[1016,4.707,1.925,0.409,0.985],[1017,4.702,2.225,0.473,0.965],[1018,5.105,1.871,0.367,0.995],[1019,4.782,1.792,0.375,0.995],[1020,5.04,2.149,0.426,0.96],[1021,5.442,2.538,0.466,0.91],[1022,4.824,2.046,0.424,0.98],[1023,5.054,1.976,0.391,0.975],[1024,4.878,2.17,0.445,0.97],[1025,4.75,2.026,0.427,0.98],[1026,4.859,2.726,0.561,0.955],[1027,4.885,2.107,0.431,0.985],[1028,4.916,1.878,0.382,0.995],[1029,5.268,2.514,0.477,0.91],[1030,5.13,2.141,0.417,0.98],[1031,5.026,2.18,0.434,0.99],[1032,5.069,1.963,0.387,0.98],[1033,4.966,1.949,0.393,0.995],[1034,4.615,2.093,0.453,0.985],[1035,5.079,2.05,0.404,0.975],[1036,5.326,2.184,0.41,0.95],[1037,4.803,2.384,0.496,0.955],[1038,5.017,1.99,0.397,0.965],[1039,5.122,2.103,0.411,0.97],[1040,4.848,1.801,0.371,0.995],[1041,5.048,2.072,0.411,0.98],[1042,5.087,1.68,0.33,0.995],[1043,5.674,2.497,0.44,0.945],[1044,5.618,2.279,0.406,0.95],[1045,4.745,1.766,0.372,0.99],[1046,5.145,2.223,0.432,0.955],[1047,5.443,2.293,0.421,0.97],[1048,4.948,2.034,0.411,0.995],[1049,4.926,1.899,0.385,0.995],[1050,5.018,1.991,0.397,0.99]],"reqs":{"SYS-001":{"pri":"M","method":"D, T","text":"From a fresh checkout on supported Linux, a user shall be able to build, test, run the reference scenario and analyze its output using only commands documented in the README.","tests":[["tests/python/test_configuration_rules.py","test_the_dockerfile_pins_its_base_image_by_digest"],["tests/python/test_configuration_rules.py","test_the_dockerfile_follows_the_readme_steps_and_runs_the_whole_test_suite"],["tests/python/test_configuration_rules.py","test_the_image_runs_as_a_non_root_user_and_holds_no_secrets_or_local_state"],["tests/python/test_configuration_rules.py","test_ci_builds_and_runs_the_container_on_every_push"],["tests/system/test_sensor_and_sidecar.py","test_analysis_reads_a_noisy_run_end_to_end"],["tests/system/test_walking_skeleton.py","test_analysis_prints_rmse_for_a_fresh_run"]]},"SYS-002":{"pri":"M","method":"I, T","text":"The estimator shall use measurements and configuration only. Ground truth shall be used for evaluation only.","tests":[["tests/gtest/interface_tests.cpp","Interfaces.EstimatorCannotAcceptTruth"]]},"SYS-003":{"pri":"M","method":"T","text":"Identical configuration, seed, platform and build shall produce identical outputs.","tests":[["tests/system/test_sensor_and_sidecar.py","test_same_seed_gives_byte_identical_outputs_and_another_seed_differs"],["tests/system/test_sensor_and_sidecar.py","test_default_run_is_reproducible"]]},"SYS-004":{"pri":"M","method":"T, A","text":"The system shall quantify estimator performance against the raw sensor and against the estimator's own reported uncertainty.","tests":[["tests/python/test_ensemble_logic.py","test_an_exact_sensor_has_no_ratio_and_summarize_says_so"],["tests/python/test_readme_references.py","test_the_readmes_acceleration_figures_match_the_validation_record"],["tests/system/test_analysis_outputs.py","test_one_command_prints_the_metrics_and_writes_the_json_and_the_plot"],["tests/system/test_ensemble_tool.py","test_the_report_and_summary_files_agree_with_the_per_seed_runs"],["tests/system/test_ensemble_tool.py","test_the_exit_code_is_1_and_the_report_says_FAIL_when_the_filter_is_mismatched"],["tests/system/test_ensemble_tool.py","test_a_failing_sim_run_is_reported_not_swallowed"],["tests/system/test_ensemble_tool.py","test_a_nonsense_seed_count_is_refused"],["tests/system/test_estimator_performance.py","test_the_estimate_beats_the_raw_readings_on_every_held_out_seed"],["tests/system/test_estimator_performance.py","test_the_filters_error_bars_are_honest_on_the_pooled_held_out_seeds"],["tests/system/test_estimator_performance.py","test_the_readme_and_the_validation_record_quote_the_figures_this_ensemble_produces"],["tests/system/test_readme_claims.py","test_the_readmes_expected_output_block_is_what_a_fresh_run_prints"],["tests/system/test_readme_claims.py","test_the_readmes_prose_numbers_match_the_same_run"],["tests/system/test_readme_claims.py","test_the_velocity_estimate_is_within_one_mps_of_the_truth_from_five_seconds_on"]]},"SYS-005":{"pri":"M","method":"T","text":"Every Must requirement shall be traceable to at least one verification activity, and the check shall be automated.","tests":[["tests/python/test_configuration_rules.py","test_ci_runs_the_traceability_gate_with_coverage_required"]]},"SYS-006":{"pri":"M","method":"I","text":"All documentation shall state that the system is an educational simulation and shall not claim flight qualification, operational fidelity or real sensor fusion.","tests":[["tests/python/test_configuration_rules.py","test_each_document_says_it_is_an_educational_simulation"],["tests/python/test_configuration_rules.py","test_no_document_claims_qualification_or_operational_fidelity_except_to_deny_it"],["tests/python/test_configuration_rules.py","test_the_readme_has_every_section_the_requirement_lists"],["tests/python/test_evidence_table.py","test_the_table_has_rows_with_unique_ids_and_a_known_strength_for_each"],["tests/python/test_evidence_table.py","test_every_quoted_claim_is_still_in_the_readme_word_for_word"],["tests/python/test_evidence_table.py","test_every_piece_of_evidence_exists_and_is_the_kind_the_row_says"],["tests/python/test_evidence_table.py","test_every_readme_paragraph_and_bullet_has_a_row"],["tests/python/test_evidence_table.py","test_the_table_states_the_sys_006_disclaimer_and_admits_what_it_does_not_support"]]},"SIM-001":{"pri":"M","method":"I","text":"Represent true state as position (m) and velocity (m/s) at time t (s).","tests":[["tests/gtest/interface_tests.cpp","Interfaces.TrueStateHoldsTimePositionAndVelocity"]]},"SIM-002":{"pri":"M","method":"T","text":"Advance state in fixed steps of `dt` > 0. Time for step k is computed as `t = k * dt`, **not** by repeatedly adding `dt`.","tests":[["tests/gtest/dynamics_tests.cpp","Dynamics.ConstantVelocityMatchesAnalyticSolution"],["tests/gtest/dynamics_tests.cpp","Dynamics.EulerWithAccelerationMatchesVvSim01"]]},"SIM-003":{"pri":"M","method":"T, A","text":"With zero acceleration, propagation matches the analytic solution `x = x0 + v0\u00b7t`.","tests":[["tests/gtest/dynamics_tests.cpp","Dynamics.ConstantVelocityMatchesAnalyticSolution"],["tests/gtest/dynamics_tests.cpp","Dynamics.EulerErrorIsTheDocumentedBoundWithinRoundingAllowance"],["tests/gtest/dynamics_tests.cpp","Dynamics.ZeroAccelerationLeavesVelocityUnchanged"]]},"SIM-004":{"pri":"S","method":"T","text":"Accept an optional constant known acceleration (m/s\u00b2).","tests":[["tests/gtest/dynamics_tests.cpp","Dynamics.EulerWithAccelerationMatchesVvSim01"],["tests/gtest/dynamics_tests.cpp","Dynamics.EulerErrorIsTheDocumentedBoundWithinRoundingAllowance"],["tests/gtest/dynamics_tests.cpp","Dynamics.ZeroAccelerationLeavesVelocityUnchanged"],["tests/system/test_walking_skeleton.py","test_accel_flag_reproduces_vv_sim_01_through_the_binary"],["tests/system/test_walking_skeleton.py","test_accel_equals_form_and_negative_values_are_accepted"]]},"SIM-005":{"pri":"M","method":"T","text":"Run for a configured number of steps N and produce N+1 truth rows (including t = 0).","tests":[["tests/gtest/runner_tests.cpp","Runner.NSTepsProduceNPlusOneRows"],["tests/system/test_walking_skeleton.py","test_default_run_writes_header_and_n_plus_one_rows"]]},"SIM-006":{"pri":"M","method":"T","text":"dt shall be finite and > 0; the step count N shall be an integer \u2265 0; x0, v0 and accel shall be finite. Otherwise construction shall fail naming the parameter.","tests":[["tests/gtest/dynamics_tests.cpp","Dynamics.ValidateRejectsEachBadSetting"],["tests/gtest/dynamics_tests.cpp","Dynamics.ValidateAcceptsBoundaryAndNegativeSettings"],["tests/gtest/runner_tests.cpp","Runner.InvalidConfigTouchesNothing"]]},"SEN-001":{"pri":"M","method":"I","text":"Measure position only (not velocity).","tests":[["tests/gtest/interface_tests.cpp","Interfaces.MeasurementHasNoVelocityField"]]},"SEN-002":{"pri":"M","method":"T","text":"Produce a measurement every M simulation steps (M \u2265 1, configurable), starting at step 0.","tests":[["tests/gtest/sensor_tests.cpp","NoisySensor.ReadsOnEveryMthStepStartingAtZero"],["tests/system/test_sensor_and_sidecar.py","test_one_reading_every_m_steps_starting_at_step_zero"]]},"SEN-003":{"pri":"M","method":"T","text":"Add zero-mean Gaussian noise with standard deviation \u03c3 (m), configurable, \u03c3 \u2265 0. \u03c3 = 0 returns the exact true position.","tests":[["tests/gtest/sensor_tests.cpp","NoisySensor.ZeroSigmaReturnsTheExactPosition"],["tests/gtest/sensor_tests.cpp","NoisySensor.NoiseHasTheRequestedMeanAndSpread"],["tests/gtest/sensor_tests.cpp","NoisySensor.SameSeedSameReadingsAndSigmaOnlyScalesThem"],["tests/system/test_sensor_and_sidecar.py","test_sigma_zero_reads_the_exact_truth"],["tests/system/test_sensor_and_sidecar.py","test_default_noise_has_the_requested_mean_and_spread"]]},"SEN-004":{"pri":"M","method":"T","text":"The same seed and configuration produce an identical measurement sequence on the same platform and build.","tests":[["tests/gtest/sensor_tests.cpp","NoisySensor.SameSeedSameReadingsAndSigmaOnlyScalesThem"],["tests/system/test_sensor_and_sidecar.py","test_same_seed_gives_byte_identical_outputs_and_another_seed_differs"],["tests/system/test_sensor_and_sidecar.py","test_default_run_is_reproducible"]]},"SEN-005":{"pri":"M","method":"T","text":"Each measurement carries the timestamp of the truth it observed and a sensor ID.","tests":[["tests/gtest/sensor_tests.cpp","NoisySensor.ReadingCarriesTruthTimeAndSensorId"]]},"SEN-006":{"pri":"M","method":"I, T","text":"Observing truth does not modify truth.","tests":[["tests/gtest/sensor_tests.cpp","NoisySensor.ObservingDoesNotChangeTheTruth"]]},"SEN-007":{"pri":"M","method":"T","text":"Reject invalid configuration (\u03c3 < 0, M < 1) with a clear error.","tests":[["tests/gtest/sensor_tests.cpp","NoisySensor.RejectsBadSettingsNamingTheParameter"]]},"EST-001":{"pri":"M","method":"T, A","text":"Implement a linear Kalman filter with state `[position, velocity]` and 2\u00d72 covariance `P`.","tests":[["tests/gtest/kalman_tests.cpp","KalmanMath.PredictMatchesVvEst01"],["tests/gtest/kalman_tests.cpp","KalmanMath.UpdateMatchesVvEst01IncludingTheJosephForm"],["tests/python/test_kalman_oracle.py","test_oracle_reproduces_the_hand_vector_vv_est_01"],["tests/python/test_kalman_oracle.py","test_allowance_is_the_floor_for_small_values_and_grows_with_step_and_size"],["tests/python/test_kalman_oracle.py","test_sidecar_with_null_estimator_settings_cannot_be_replayed"],["tests/system/test_oracle_crosscheck.py","test_cpp_filter_agrees_with_the_independent_oracle"],["tests/system/test_oracle_crosscheck.py","test_the_crosscheck_notices_a_corrupted_estimate"],["tests/system/test_oracle_crosscheck.py","test_command_line_tool_reports_success_and_failure"]]},"EST-002":{"pri":"M","method":"T","text":"The public interface accepts only `Measurement`s, `dt` and configuration. It has no access to `TrueState`.","tests":[["tests/gtest/interface_tests.cpp","Interfaces.EstimatorCannotAcceptTruth"]]},"EST-003":{"pri":"M","method":"T","text":"**Predict** every step, whether or not a measurement is available.","tests":[["tests/gtest/kalman_tests.cpp","KalmanMath.PredictMatchesVvEst01"],["tests/gtest/kalman_tests.cpp","KalmanMath.PredictOnlyMovesTheGuessForwardAndGrowsTheDoubt"]]},"EST-004":{"pri":"M","method":"T","text":"**Update** (correct) when a measurement is available.","tests":[["tests/gtest/kalman_tests.cpp","KalmanMath.UpdateMovesTowardTheReadingAndShrinksTheDoubt"]]},"EST-005":{"pri":"M","method":"T","text":"Configurable: initial state, initial covariance, process noise intensity `q`, measurement noise variance `R`.","tests":[["tests/system/test_sensor_and_sidecar.py","test_sidecar_has_the_contract_keys_and_records_the_run"]]},"EST-006":{"pri":"M","method":"T","text":"`P` stays symmetric with non-negative diagonal after every step.","tests":[["tests/gtest/kalman_tests.cpp","KalmanEstimator.CovarianceStaysSymmetricWithNonNegativeDiagonalOver1000Steps"]]},"EST-007":{"pri":"M","method":"T","text":"With \u03c3 = 0 and small `R`, the estimate converges to truth.","tests":[["tests/gtest/kalman_tests.cpp","KalmanEstimator.NoiseFreeRunConvergesToTruthInPositionAndVelocity"]]},"EST-008":{"pri":"M","method":"T","text":"Reference scenario (\u00a76): estimated-position RMSE is lower than raw-measurement RMSE, evaluated at measurement timestamps.","tests":[["tests/python/test_ensemble_logic.py","test_one_bad_seed_fails_val_02_even_if_the_average_is_fine"],["tests/python/test_ensemble_logic.py","test_the_ratio_limit_itself_is_allowed"],["tests/system/test_ensemble_tool.py","test_the_report_and_summary_files_agree_with_the_per_seed_runs"],["tests/system/test_estimator_performance.py","test_the_estimate_beats_the_raw_readings_on_every_held_out_seed"]]},"EST-009":{"pri":"M","method":"T","text":"The estimator shall start uninitialized. It shall initialize on its first measurement (x\u0302 = [z, 0], P = P0) without a predict step. predict before initialization shall be rejected. Rows before initialization shall have empty estimate fields.","tests":[["tests/gtest/kalman_tests.cpp","KalmanEstimator.InitializesFromTheFirstReadingWithoutPredicting"],["tests/gtest/kalman_tests.cpp","KalmanEstimator.PredictOrUpdateBeforeInitializeAreRejectedAndChangeNothing"],["tests/gtest/kalman_tests.cpp","KalmanEstimator.SecondInitializeIsRejected"],["tests/gtest/runner_tests.cpp","Runner.CallOrderMatchesSpecification"],["tests/python/test_kalman_oracle.py","test_replay_starts_at_the_first_reading_without_a_predict_step"],["tests/system/test_estimator.py","test_filter_starts_at_the_first_reading_with_no_predict_step"],["tests/system/test_oracle_crosscheck.py","test_the_crosscheck_notices_a_disagreement_about_when_the_filter_starts"]]},"EST-010":{"pri":"M","method":"T","text":"Estimator configuration shall be validated: R > 0, q \u2265 0, P0 symmetric with non-negative diagonal and determinant \u2265 0, dt > 0. Otherwise fail naming the parameter.","tests":[["tests/gtest/estimator_tests.cpp","EstimatorConfig.ReferenceScenarioDefaultsAreValid"],["tests/gtest/estimator_tests.cpp","EstimatorConfig.RejectsNonPositiveOrNonFiniteR"],["tests/gtest/estimator_tests.cpp","EstimatorConfig.RejectsNegativeOrNonFiniteQAndStartingDoubt"],["tests/gtest/estimator_tests.cpp","EstimatorConfig.ZeroIsAllowedForQAndStartingDoubt"],["tests/gtest/kalman_tests.cpp","KalmanEstimator.RejectsBadSettingsAndBadTimeSteps"]]},"EST-011":{"pri":"S","method":"I, T","text":"The covariance update shall use the Joseph form P\u207a = (I\u2212KH)P\u207b(I\u2212KH)\u1d40 + KRK\u1d40.","tests":[["tests/gtest/kalman_tests.cpp","KalmanMath.UpdateMatchesVvEst01IncludingTheJosephForm"],["tests/python/test_kalman_oracle.py","test_short_update_form_in_doubles_loses_digits_that_the_oracle_keeps"]]},"EST-012":{"pri":"M","method":"T","text":"Over the pooled held-out seed set (TST-012, \u2265 20 seeds), the fraction of measurement-time position errors within \u00b12\u03c3 of the estimator's reported position standard deviation shall be \u2265 0.90 [TBD: re-measure in C++].","tests":[["tests/python/test_ensemble_logic.py","test_coverage_is_pooled_from_counts_not_averaged_over_seeds"],["tests/python/test_seed_sets.py","test_held_out_set_is_big_enough_and_each_set_is_valid"],["tests/system/test_ensemble_tool.py","test_the_exit_code_is_1_and_the_report_says_FAIL_when_the_filter_is_mismatched"],["tests/system/test_estimator_performance.py","test_the_filters_error_bars_are_honest_on_the_pooled_held_out_seeds"]]},"EST-013":{"pri":"M","method":"T","text":"A measurement with a non-finite value or a timestamp earlier than the last processed time shall be rejected with an error, leaving estimator state unchanged.","tests":[["tests/gtest/kalman_tests.cpp","KalmanEstimator.RejectedReadingsLeaveTheStateUnchanged"],["tests/gtest/kalman_tests.cpp","KalmanEstimator.NonFiniteFirstReadingIsRejected"]]},"CFG-001":{"pri":"M","method":"T","text":"All parameters are settable through command-line flags with documented defaults. **[DECIDE D3]**","tests":[["tests/system/test_walking_skeleton.py","test_help_lists_every_flag_with_its_unit_and_default_and_each_default_is_accepted"],["tests/system/test_walking_skeleton.py","test_accel_equals_form_and_negative_values_are_accepted"]]},"CFG-002":{"pri":"M","method":"T","text":"Invalid input \u2192 message on stderr, non-zero exit code, no partial output file.","tests":[["tests/system/test_sensor_and_sidecar.py","test_runtime_failure_leaves_no_csv_sidecar_or_temp_file"],["tests/system/test_sensor_and_sidecar.py","test_an_output_path_that_is_a_directory_fails_cleanly_and_leaves_it_alone"],["tests/system/test_walking_skeleton.py","test_a_flag_with_no_value_is_a_usage_error"],["tests/system/test_walking_skeleton.py","test_unwritable_output_exits_1"]]},"CFG-003":{"pri":"M","method":"T","text":"Estimator parameters (q, R, P0) shall be set independently of the sensor's true noise \u03c3. No default derives one from the other at run time.","tests":[["tests/system/test_estimator.py","test_filter_assumption_is_independent_of_the_sensors_true_noise"],["tests/system/test_estimator.py","test_changing_sigma_alone_does_not_change_the_filters_assumed_r"]]},"RUN-001":{"pri":"M","method":"T","text":"The runner performs, in order: propagate \u2192 observe (if due) \u2192 predict \u2192 update (if measured) \u2192 record.","tests":[["tests/gtest/runner_tests.cpp","Runner.CallOrderMatchesSpecification"]]},"OUT-001":{"pri":"M","method":"T","text":"Write one CSV with a header row. Columns: `step,t_s,true_pos_m,true_vel_mps,meas_pos_m,est_pos_m,est_vel_mps,est_pos_var_m2,est_vel_var_m2s2`. `meas_pos_m` is empty when no measurement was taken. **[DECIDE D4]**","tests":[["tests/gtest/recorder_tests.cpp","CsvRecorder.HeaderIsExact"],["tests/system/test_walking_skeleton.py","test_default_run_writes_header_and_n_plus_one_rows"]]},"OUT-002":{"pri":"M","method":"T","text":"Doubles are written with enough precision to round-trip (17 significant digits).","tests":[["tests/gtest/recorder_tests.cpp","CsvRecorder.MissingValuesAreEmptyAndNumbersRoundTrip"]]},"OUT-003":{"pri":"M","method":"T","text":"Write the effective configuration (including seed) next to the CSV for reproducibility.","tests":[["tests/gtest/sidecar_tests.cpp","Sidecar.PathIsTheCsvPathPlusConfigJson"],["tests/gtest/sidecar_tests.cpp","Sidecar.RecordsEffectiveSettingsAndTheSeed"],["tests/gtest/sidecar_tests.cpp","Sidecar.EscapesQuotesBackslashesAndControlCharacters"],["tests/system/test_sensor_and_sidecar.py","test_sidecar_has_the_contract_keys_and_records_the_run"],["tests/system/test_sensor_and_sidecar.py","test_sidecar_escapes_an_awkward_sensor_id"],["tests/system/test_sensor_and_sidecar.py","test_analysis_reads_a_noisy_run_end_to_end"]]},"OUT-004":{"pri":"M","method":"T","text":"The output CSV shall be written atomically: write to a temporary file and rename on success. A failed run shall leave no partial CSV.","tests":[["tests/gtest/output_util_tests.cpp","AtomicFile.AppearsOnlyAtCommitAndCommitIsIdempotent"],["tests/gtest/output_util_tests.cpp","AtomicFile.RenamingOntoADirectoryThrowsAndLeavesNoTempFile"],["tests/gtest/recorder_tests.cpp","CsvRecorder.NoFileLeftBehindWithoutCommit"],["tests/system/test_sensor_and_sidecar.py","test_runtime_failure_leaves_no_csv_sidecar_or_temp_file"],["tests/system/test_sensor_and_sidecar.py","test_an_output_path_that_is_a_directory_fails_cleanly_and_leaves_it_alone"],["tests/system/test_walking_skeleton.py","test_unwritable_output_exits_1"]]},"OUT-005":{"pri":"M","method":"T","text":"A missing value shall be an empty field. nan, inf and - shall never appear.","tests":[["tests/gtest/recorder_tests.cpp","CsvRecorder.MissingValuesAreEmptyAndNumbersRoundTrip"],["tests/gtest/recorder_tests.cpp","CsvRecorder.RejectsNonFiniteValues"]]},"ANA-001":{"pri":"M","method":"T","text":"Load the CSV and validate the required columns; fail with a clear message if any are missing.","tests":[["tests/python/test_analyze.py","test_wrong_header_is_rejected"],["tests/python/test_analyze.py","test_row_with_wrong_field_count_is_rejected"],["tests/python/test_analyze.py","test_non_text_file_is_rejected_not_a_traceback"],["tests/python/test_analyze.py","test_cli_reports_bad_cell_on_stderr_with_exit_1"],["tests/python/test_analyze.py","test_good_file_still_reads"],["tests/python/test_analyze.py","test_a_negative_variance_is_rejected_not_square_rooted"],["tests/python/test_analyze.py","test_a_valid_sidecar_is_read_and_null_estimator_keys_are_allowed"],["tests/python/test_analyze.py","test_an_unknown_schema_version_is_rejected"],["tests/python/test_analyze.py","test_a_missing_sidecar_a_missing_key_and_bad_json_are_rejected"],["tests/python/test_analyze.py","test_a_csv_that_does_not_match_its_sidecar_is_rejected"],["tests/system/test_analysis_outputs.py","test_analyze_refuses_a_csv_whose_sidecar_has_an_unknown_version"],["tests/system/test_analysis_outputs.py","test_analyze_refuses_a_csv_with_no_sidecar_or_the_wrong_one"]]},"ANA-002":{"pri":"M","method":"T","text":"Compute position and velocity RMSE of the estimate, and position RMSE of the raw measurements.","tests":[["tests/python/test_analyze.py","test_rmse_uses_only_rows_with_a_measurement"],["tests/python/test_analyze.py","test_no_measurements_is_an_error_not_a_division_by_zero"],["tests/python/test_analyze.py","test_cli_reports_bad_cell_on_stderr_with_exit_1"],["tests/system/test_walking_skeleton.py","test_analysis_prints_rmse_for_a_fresh_run"]]},"ANA-003":{"pri":"M","method":"T","text":"Plot truth, measurements and estimate versus time, with labeled axes, units and a legend, saved as a PNG.","tests":[["tests/python/test_plot.py","test_every_panel_has_labelled_axes_with_units_and_a_legend"],["tests/python/test_plot.py","test_the_plot_is_written_as_a_real_png"],["tests/python/test_plot.py","test_rows_before_the_estimator_starts_become_gaps_not_errors"],["tests/system/test_analysis_outputs.py","test_one_command_prints_the_metrics_and_writes_the_json_and_the_plot"],["tests/system/test_analysis_outputs.py","test_an_unwritable_output_path_is_reported_before_any_slow_work"]]},"ANA-004":{"pri":"M","method":"T","text":"Plot estimation error with \u00b12\u03c3 bounds from the covariance.","tests":[["tests/python/test_analyze.py","test_two_sigma_coverage_on_a_known_input"],["tests/python/test_analyze.py","test_a_zero_variance_covers_only_a_zero_error"],["tests/python/test_analyze.py","test_a_negative_variance_is_rejected_not_square_rooted"],["tests/system/test_analysis_outputs.py","test_one_command_prints_the_metrics_and_writes_the_json_and_the_plot"]]},"ANA-005":{"pri":"S","method":"T","text":"Print metrics to stdout and optionally write them as JSON.","tests":[["tests/python/test_analyze.py","test_metrics_json_has_exactly_the_contract_keys_in_order"],["tests/python/test_analyze.py","test_improvement_ratio_is_null_not_nan_when_the_raw_readings_are_exact"],["tests/python/test_analyze.py","test_metrics_json_refuses_non_finite_values_and_leaves_no_file"],["tests/system/test_analysis_outputs.py","test_one_command_prints_the_metrics_and_writes_the_json_and_the_plot"],["tests/system/test_analysis_outputs.py","test_an_exact_sensor_gives_a_null_improvement_ratio_in_the_file"],["tests/system/test_analysis_outputs.py","test_an_unwritable_output_path_is_reported_before_any_slow_work"]]},"NFR-001":{"pri":"M","method":"I, D","text":"Name the toolchain baseline: GCC 13.3 and Clang 18.1 (both present on the development machine), CMake \u2265 3.20.","tests":[["tests/python/test_configuration_rules.py","test_the_build_names_its_language_standard_and_treats_warnings_as_errors"],["tests/python/test_configuration_rules.py","test_ci_builds_with_gcc_and_clang_with_warnings_as_errors_and_the_readme_names_them"]]},"NFR-002":{"pri":"M","method":"I","text":"Simcore links only the standard library.","tests":[["tests/gtest/mat2_tests.cpp","Mat2.MatrixProductByHand"],["tests/gtest/mat2_tests.cpp","Mat2.ProductIsNotCommutative"],["tests/gtest/mat2_tests.cpp","Mat2.IdentityLeavesAMatrixUnchanged"],["tests/gtest/mat2_tests.cpp","Mat2.MatrixTimesVector"],["tests/gtest/mat2_tests.cpp","Mat2.TransposeSwapsTheOffDiagonal"],["tests/gtest/mat2_tests.cpp","Mat2.SumDifferenceAndScalarMultiple"],["tests/gtest/mat2_tests.cpp","Mat2.OuterProductOfColumnAndRow"],["tests/gtest/mat2_tests.cpp","Vec2.SumDifferenceAndScalarMultiple"]]},"NFR-003":{"pri":"M","method":"I, T","text":"Grep rule: no rand(, time(, global state.","tests":[["tests/python/test_repo_rules.py","test_simcore_uses_no_hidden_randomness_or_clock"],["tests/system/test_build_interfaces.py","test_the_compiled_library_holds_no_writable_global_state"]]},"NFR-004":{"pri":"M","method":"T","text":"Add: no golden CSV files are committed. Determinism is tested by comparing two runs on the same machine.","tests":[["tests/system/test_sensor_and_sidecar.py","test_same_seed_gives_byte_identical_outputs_and_another_seed_differs"]]},"NFR-005":{"pri":"M","method":"I","text":"Naming review; CSV header check.","tests":[["tests/python/test_configuration_rules.py","test_every_csv_column_and_sidecar_key_carries_its_unit"],["tests/python/test_configuration_rules.py","test_every_numeric_field_of_the_config_and_state_structs_carries_its_unit"]]},"NFR-006":{"pri":"M","method":"T","text":"Clarify: the 30 s budget includes the seed-ensemble tests (EST-008, EST-012).","tests":[["tests/python/test_check_budget.py","test_a_suite_inside_the_budget_passes_and_one_over_it_fails"],["tests/python/test_check_budget.py","test_times_from_several_junit_files_are_added"],["tests/python/test_check_budget.py","test_an_unreadable_or_empty_report_fails_instead_of_passing"],["tests/python/test_configuration_rules.py","test_ci_enforces_the_thirty_second_budget_on_the_normal_build"]]},"NFR-007":{"pri":"S","method":"T","text":"ASan and UBSan CI job.","tests":[["tests/python/test_configuration_rules.py","test_a_sanitizer_build_exists_and_ci_runs_it"]]},"NFR-008":{"pri":"C","method":"D","text":"Add: target \u2265 90 % line coverage on simcore as a goal reported in CI, not a gate.","tests":[["tests/python/test_configuration_rules.py","test_a_coverage_report_exists_and_ci_uploads_it_without_gating_on_it"]]},"NFR-009":{"pri":"S","method":"I","text":"All external dependencies (test framework, Python packages) shall be pinned to exact versions. Python tools shall run in a virtual environment built from a pinned requirements file.","tests":[["tests/python/test_configuration_rules.py","test_every_python_dependency_is_pinned_to_an_exact_version"],["tests/python/test_configuration_rules.py","test_the_test_framework_download_is_pinned_by_content_hash"],["tests/python/test_configuration_rules.py","test_the_dockerfile_pins_its_base_image_by_digest"]]},"NFR-010":{"pri":"S","method":"I","text":"Each accepted baseline of this document and the source shall be tagged in version control.","tests":[]},"TST-001":{"pri":"M","method":"I","text":"Main.cpp contains flag parsing and one call into simcore.","tests":[["tests/python/test_repo_rules.py","test_main_makes_one_call_into_simcore"]]},"TST-002":{"pri":"M","method":"D","text":"CI builds with each adapter; changes outside tests/ are empty.","tests":[["tests/python/test_configuration_rules.py","test_no_test_framework_is_named_outside_tests"],["tests/system/test_build_interfaces.py","test_an_unknown_test_framework_is_refused_at_configure_time"]]},"TST-003":{"pri":"M","method":"T","text":"Ctest -N lists every test.","tests":[["tests/system/test_build_interfaces.py","test_ctest_lists_every_cpp_test_and_both_wrapper_tests"]]},"TST-004":{"pri":"M","method":"I","text":"JUnit files exist and parse.","tests":[["tests/python/test_configuration_rules.py","test_ctest_is_set_up_to_write_junit_for_both_runners"],["tests/python/test_req_trace.py","test_a_missing_or_unparseable_junit_file_fails_the_gate_with_a_clear_message"],["tests/python/test_req_trace.py","test_junit_files_with_no_tests_fail_the_gate_instead_of_passing_vacuously"],["tests/system/test_build_interfaces.py","test_the_cpp_test_binary_writes_junit_that_parses_and_carries_requirement_tags"],["tests/system/test_build_interfaces.py","test_pytest_writes_junit_that_parses"]]},"TST-005":{"pri":"M","method":"T","text":"TST-011 script.","tests":[["tests/python/test_req_trace.py","test_unknown_id_and_orphan_test_always_fail"]]},"TST-006":{"pri":"M","method":"I","text":"Grep: no framework headers in tests/support.","tests":[["tests/python/test_repo_rules.py","test_test_support_includes_no_framework_headers"]]},"TST-007":{"pri":"M","method":"I, T","text":"Fakes used in RUN-001 test.","tests":[["tests/gtest/runner_tests.cpp","Runner.CallOrderMatchesSpecification"]]},"TST-008":{"pri":"M","method":"I","text":"Pytest drives the binary.","tests":[["tests/python/test_configuration_rules.py","test_every_system_test_file_drives_the_built_program_and_ctest_supplies_it"]]},"TST-009":{"pri":"M","method":"D","text":"CI run on push and pull request.","tests":[["tests/python/test_configuration_rules.py","test_ci_runs_on_every_push_and_pull_request_and_runs_the_readme_commands"]]},"TST-010":{"pri":"C","method":"D","text":"CI matrix with Catch2 (if attempted).","tests":[]},"TST-011":{"pri":"M","method":"T","text":"A script shall generate the requirement-to-test matrix from test tags and requirement IDs, and shall fail CI if (a) a Must requirement has no test, or (b) a test cites an unknown ID.","tests":[["tests/python/test_configuration_rules.py","test_ci_runs_the_traceability_gate_with_coverage_required"],["tests/python/test_req_trace.py","test_all_musts_covered_passes_even_with_gate_on"],["tests/python/test_req_trace.py","test_uncovered_must_fails_only_when_gate_is_on"],["tests/python/test_req_trace.py","test_unknown_id_and_orphan_test_always_fail"],["tests/python/test_req_trace.py","test_failed_test_does_not_count_as_coverage"],["tests/python/test_req_trace.py","test_pytest_style_property_child_is_read"],["tests/python/test_req_trace.py","test_a_missing_or_unparseable_junit_file_fails_the_gate_with_a_clear_message"],["tests/python/test_req_trace.py","test_junit_files_with_no_tests_fail_the_gate_instead_of_passing_vacuously"]]},"TST-012":{"pri":"M","method":"T, I","text":"Estimator tuning shall use a tuning seed set. Acceptance tests (EST-008, EST-012) shall use a disjoint held-out seed set. An automated check shall verify disjointness.","tests":[["tests/python/test_seed_sets.py","test_tuning_and_held_out_seeds_are_disjoint"],["tests/python/test_seed_sets.py","test_held_out_set_is_big_enough_and_each_set_is_valid"],["tests/python/test_seed_sets.py","test_acceptance_tests_use_only_the_held_out_seeds"]]},"DOC-001":{"pri":"M","method":"I","text":"The README shall include: purpose, data flow, units and assumptions, build/test/run/analyze commands, sample output, limitations and next steps, and the SYS-006 statement.","tests":[["tests/python/test_configuration_rules.py","test_the_readme_has_every_section_the_requirement_lists"],["tests/python/test_evidence_table.py","test_the_table_has_rows_with_unique_ids_and_a_known_strength_for_each"],["tests/python/test_evidence_table.py","test_every_quoted_claim_is_still_in_the_readme_word_for_word"],["tests/python/test_evidence_table.py","test_every_piece_of_evidence_exists_and_is_the_kind_the_row_says"],["tests/python/test_evidence_table.py","test_every_readme_paragraph_and_bullet_has_a_row"],["tests/python/test_evidence_table.py","test_the_table_states_the_sys_006_disclaimer_and_admits_what_it_does_not_support"],["tests/python/test_readme_references.py","test_every_path_in_the_repository_layout_table_exists"],["tests/python/test_readme_references.py","test_every_relative_link_and_image_in_the_readme_resolves"],["tests/python/test_readme_references.py","test_a_perfect_filter_scores_about_95_percent"],["tests/python/test_readme_references.py","test_the_registry_has_as_many_must_requirements_as_the_readme_says"],["tests/python/test_readme_references.py","test_the_readmes_acceleration_figures_match_the_validation_record"],["tests/system/test_estimator_performance.py","test_the_readme_and_the_validation_record_quote_the_figures_this_ensemble_produces"],["tests/system/test_readme_claims.py","test_the_readmes_expected_output_block_is_what_a_fresh_run_prints"],["tests/system/test_readme_claims.py","test_the_readmes_prose_numbers_match_the_same_run"],["tests/system/test_readme_claims.py","test_the_velocity_estimate_is_within_one_mps_of_the_truth_from_five_seconds_on"]]},"DOC-002":{"pri":"S","method":"I","text":"docs/architecture.md shall reflect \u00a77 and \u00a78 of this baseline and be updated whenever either changes.","tests":[]}}};
+const GH = "https://github.com/giba12/Aerospace/blob/master/";
+const $ = (s) => document.querySelector(s);
+const lerp = (a, b, f) => a + (b - a) * f;
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ---------- parameters ---------- */
+const C = DATA.run.config;
+const REF = { steps: C.steps, dt: C.dt_s, x0: C.x0_m, v0: C.v0_mps, accel: C.accel_mps2, every: C.meas_every,
+  sigma: C.sigma_m, seed: C.seed, q: C.est_q_m2ps3, r: C.est_r_m2, p0pos: C.est_p0_pos_m2, p0vel: C.est_p0_vel_m2ps2 };
+const KEYS = ["sigma", "every", "accel", "r", "q", "seed"];
+const S = { p: { ...REF }, recorded: true, sim: null, head: reduceMotion ? REF.steps : 250, playing: !reduceMotion, speed: 5,
+  preset: "reference", hover: -1, yErr: 10, vLo: 0, vHi: 12 };
+
+const PRESETS = [
+  { id: "reference", name: "Reference run", p: {},
+    note: "<b>The real program's output</b> (seed 42). The orange readings scatter by about 5 m. The blue estimate stays close to the black truth and sits inside its own shaded bars about 94 % of the time. In the bottom chart the filter finds the speed, 10 m/s, from position readings alone." },
+  { id: "noisy", name: "Much noisier sensor", p: { sigma: 15, r: 225 },
+    note: "<b>Sensor noise tripled, and the filter is told.</b> Single readings are now off by 15 m, yet the estimate stays usable because the filter leans on its own prediction and uses each reading less. A noisier sensor makes the filter more valuable, not less." },
+  { id: "sparse", name: "A reading every 5 s", p: { every: 50 },
+    note: "<b>Few readings.</b> Between readings the filter coasts on its prediction and its error bars swell, then each reading pulls it back. It still helps, but much less, because there is little to average. The 0.75 limit in the requirements is a statement about the reference scenario only." },
+  { id: "overconfident", name: "Overconfident filter", p: { r: 1 },
+    note: "<b>The filter is told the sensor is five times better than it is.</b> The estimate still looks fine, and the error ratio still passes. But the shaded bars are far too narrow and the truth falls outside them most of the time. That is why the project tests the honesty of the error bars (EST-012) as well as the error." },
+  { id: "accel", name: "Break it: speeding up", p: { accel: 0.5 },
+    note: "<b>The object accelerates; the filter assumes it does not.</b> The estimate lags behind, the bottom chart shows the estimated speed falling away from the true speed, and the filter is no better than the raw readings. This is a documented limit of the model, not a bug." },
+];
+
+/* ---------- simulation state ---------- */
+function isRef() { return KEYS.every((k) => S.p[k] === REF[k]); }
+function rebuild() {
+  S.recorded = isRef();
+  const s = SimEngine.simulate(S.p, S.recorded ? DATA.run.meas : null);
+  if (S.recorded) { // show the C++ program's own numbers rather than the browser's recomputation
+    for (let i = 0; i < s.n; i++) { s.est[i] = DATA.run.est[i]; s.evel[i] = DATA.run.vel[i]; s.evar[i] = DATA.run.var[i]; }
+  }
+  S.sim = s;
+  S.head = Math.min(S.head, s.n - 1);
+  let m = 0, vlo = Infinity, vhi = -Infinity;
+  for (let i = 0; i < s.n; i++) {
+    if (!isNaN(s.meas[i])) m = Math.max(m, Math.abs(s.meas[i] - s.pos[i]));
+    if (!isNaN(s.est[i])) m = Math.max(m, Math.abs(s.est[i] - s.pos[i]));
+    vlo = Math.min(vlo, s.vel[i], isNaN(s.evel[i]) ? Infinity : s.evel[i]);
+    vhi = Math.max(vhi, s.vel[i], isNaN(s.evel[i]) ? -Infinity : s.evel[i]);
+  }
+  const steps = [10, 15, 20, 30, 40, 60, 80, 100, 150, 200, 300, 500, 800, 1200];
+  S.yErr = steps.find((v) => v >= m * 1.08) || 2000;
+  const pad = Math.max(2, (vhi - vlo) * 0.12);
+  S.vLo = vlo - pad; S.vHi = vhi + pad;
+  updateSourceUI(); needsDraw = true; lastReadoutStep = -2;
+}
+
+/* ---------- canvas ---------- */
+const cv = $("#stage"), ctx = cv.getContext("2d");
+let L = null, COL = {}, needsDraw = true, visible = true, lastReadoutStep = -2;
+function readColors() {
+  const cs = getComputedStyle(document.documentElement);
+  for (const n of ["bg", "surface", "surface2", "ink", "ink2", "ink3", "line", "blue", "orange"]) COL[n] = cs.getPropertyValue("--" + n).trim();
+  needsDraw = true; bellDirty = true;
+}
+function layout() {
+  const w = cv.parentElement.clientWidth, narrow = w < 560, dpr = Math.min(2, window.devicePixelRatio || 1);
+  const hA = narrow ? 150 : 170, hB = narrow ? 170 : 196, hC = narrow ? 120 : 140, tH = 26, gap = 20, ax = 24;
+  const left = narrow ? 40 : 50, right = 12;
+  let y = 4;
+  const A = { x: 0, w, y: y + tH, h: hA }; y = A.y + hA + gap;
+  const B = { x: left, w: w - left - right, y: y + tH, h: hB }; y = B.y + hB + gap;
+  const Cc = { x: left, w: B.w, y: y + tH, h: hC }; y = Cc.y + hC + ax;
+  cv.width = Math.round(w * dpr); cv.height = Math.round((y + 4) * dpr); cv.style.height = (y + 4) + "px";
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  L = { w, H: y + 4, A, B, C: Cc, narrow };
+  needsDraw = true;
+}
+const MONO = '11px "IBM Plex Mono", ui-monospace, monospace';
+function txt(t, x, y, o = {}) {
+  ctx.font = o.font || MONO; ctx.textAlign = o.align || "left"; ctx.textBaseline = o.base || "alphabetic";
+  if (o.halo) { ctx.lineWidth = 4; ctx.strokeStyle = o.halo; ctx.lineJoin = "round"; ctx.strokeText(t, x, y); }
+  ctx.fillStyle = o.color || COL.ink3; ctx.fillText(t, x, y);
+}
+function line(x1, y1, x2, y2, c, w = 1, dash) {
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.strokeStyle = c; ctx.lineWidth = w; ctx.setLineDash(dash || []); ctx.stroke(); ctx.setLineDash([]);
+}
+function dot(x, y, r, c, ring) {
+  ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); if (ring) { ctx.lineWidth = 2; ctx.strokeStyle = COL.surface2; ctx.stroke(); } ctx.fillStyle = c; ctx.fill();
+}
+function rrect(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
+function fmtErr(v) { return (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(1); }
+function fmtTick(v) { return (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(+v.toFixed(1)); }
+function niceStep(range, n) { const raw = range / n, p = Math.pow(10, Math.floor(Math.log10(raw))); const f = raw / p; return (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * p; }
+
+function draw() {
+  const s = S.sim, k = Math.min(Math.floor(S.head), s.n - 1), f = k < s.n - 1 ? S.head - k : 0;
+  ctx.clearRect(0, 0, L.w, L.H);
+  drawWorld(s, k, f); drawError(s, k); drawVelocity(s, k);
+  // time axis
+  const { B } = L, T = s.t[s.n - 1] || 1, st = [5, 10, 20, 25, 50].find((v) => T / v <= 8) || 100;
+  for (let t = 0; t <= T + 1e-9; t += st) txt(t + " s", B.x + (t / T) * B.w, L.C.y + L.C.h + 16, { align: t === 0 ? "left" : "center" });
+}
+
+function drawWorld(s, k, f) {
+  const { A } = L, k1 = Math.min(k + 1, s.n - 1);
+  const posNow = lerp(s.pos[k], s.pos[k1], f);
+  const Wm = 120, px = A.w / Wm, camL = posNow - 0.62 * Wm, X = (m) => A.x + (m - camL) * px;
+  const trackY = A.y + A.h * 0.5, upY = A.y + A.h * 0.2, loY = A.y + A.h * 0.8;
+  txt(L.narrow ? "WHERE IT IS, ALONG THE TRACK" : "WHERE IT IS: metres along the track, camera follows the object", 0, A.y - 10, { color: COL.ink2 });
+  ctx.save(); rrect(A.x, A.y, A.w, A.h, 8); ctx.fillStyle = COL.surface2; ctx.fill(); ctx.clip();
+  // track and ticks
+  line(A.x, trackY, A.x + A.w, trackY, COL.ink3, 1.5);
+  for (let m = Math.ceil(camL / 10) * 10; m < camL + Wm; m += 10) {
+    const x = X(m), big = m % 50 === 0;
+    line(x, trackY - (big ? 7 : 4), x, trackY + (big ? 7 : 4), COL.ink3, 1);
+    if (m % 20 === 0) txt(m + " m", x, trackY + 20, { align: "center", font: '10px "IBM Plex Mono", monospace' });
+  }
+  // history of readings, each with its error drawn as a line to the true position
+  for (let i = Math.max(0, k - 260); i <= k; i++) {
+    if (isNaN(s.meas[i])) continue;
+    const age = k - i, a = Math.max(0.12, 1 - age / 170), tx = X(s.pos[i]), ox = X(s.meas[i]);
+    if (tx < -20 && ox < -20) continue;
+    ctx.globalAlpha = a;
+    line(tx, trackY - 6, tx, trackY + 6, COL.ink, 2);
+    line(tx, trackY, ox, upY, COL.orange, 1.2); dot(ox, upY, 4.5, COL.orange);
+    if (!isNaN(s.est[i])) { const ex = X(s.est[i]); line(tx, trackY, ex, loY, COL.blue, 1.2); dot(ex, loY, 4, COL.blue); }
+    if (age < 14) { ctx.globalAlpha = (1 - age / 14) * 0.7; ctx.beginPath(); ctx.arc(ox, upY, 5 + age * 1.5, 0, 6.2832); ctx.strokeStyle = COL.orange; ctx.lineWidth = 2; ctx.stroke(); }
+    ctx.globalAlpha = 1;
+  }
+  // the object, and the filter's current guess with its ±2σ bar
+  const tx = X(posNow);
+  ctx.beginPath(); ctx.moveTo(tx + 10, trackY); ctx.lineTo(tx - 7, trackY - 8); ctx.lineTo(tx - 7, trackY + 8); ctx.closePath();
+  ctx.fillStyle = COL.ink; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = COL.surface2; ctx.stroke();
+  if (!isNaN(s.est[k])) {
+    const e = lerp(s.est[k], isNaN(s.est[k1]) ? s.est[k] : s.est[k1], f), sd = Math.sqrt(s.evar[k]);
+    const x1 = X(e - 2 * sd), x2 = X(e + 2 * sd), ex = X(e);
+    ctx.fillStyle = COL.blue; ctx.globalAlpha = 0.2; ctx.fillRect(x1, loY - 9, x2 - x1, 18); ctx.globalAlpha = 1;
+    line(x1, loY, x2, loY, COL.blue, 1.5); line(x1, loY - 6, x1, loY + 6, COL.blue, 1.5); line(x2, loY - 6, x2, loY + 6, COL.blue, 1.5);
+    dot(ex, loY, 6.5, COL.blue, true);
+  }
+  const h = { halo: COL.surface2, color: COL.ink2 };
+  txt(L.narrow ? "SENSOR READINGS" : "SENSOR READINGS (noisy)", 10, upY - 13, h);
+  txt(L.narrow ? "TRUTH" : "TRUTH (kept from the filter)", 10, trackY - 14, h);
+  txt(L.narrow ? "ESTIMATE ± 2σ" : "FILTER ESTIMATE ± 2σ", 10, loY + 25, h);
+  ctx.restore();
+}
+
+function plotFrame(P, title, ticks, Y) {
+  txt(title, 0, P.y - 10, { color: COL.ink2 });
+  for (const v of ticks) { const y = Y(v); line(P.x, y, P.x + P.w, y, v === ticks.zero ? COL.ink3 : COL.line, 1); txt(ticks.fmt(v), P.x - 6, y + 4, { align: "right" }); }
+}
+function drawError(s, k) {
+  const { B } = L, yE = S.yErr, T = s.t[s.n - 1] || 1, X = (t) => B.x + (t / T) * B.w, Y = (e) => B.y + B.h / 2 - (e / yE) * (B.h / 2);
+  const ticks = [-yE, -yE / 2, 0, yE / 2, yE]; ticks.zero = 0; ticks.fmt = fmtTick;
+  plotFrame(B, L.narrow ? "POSITION ERROR (m)" : "POSITION ERROR (m): how far off each answer is", ticks, Y);
+  ctx.save(); ctx.beginPath(); ctx.rect(B.x, B.y, B.w, B.h); ctx.clip();
+  const xn = X(s.t[k]);
+  ctx.fillStyle = COL.surface2; ctx.globalAlpha = 0.55; ctx.fillRect(xn, B.y, B.x + B.w - xn, B.h); ctx.globalAlpha = 1;
+  // filter's own ±2σ band, centred on zero error
+  let first = -1; for (let i = 0; i <= k; i++) if (!isNaN(s.est[i])) { first = i; break; }
+  if (first >= 0) {
+    ctx.beginPath();
+    for (let i = first; i <= k; i++) { const y = Y(Math.min(2 * Math.sqrt(s.evar[i]), yE * 1.2)); i === first ? ctx.moveTo(X(s.t[i]), y) : ctx.lineTo(X(s.t[i]), y); }
+    for (let i = k; i >= first; i--) ctx.lineTo(X(s.t[i]), Y(-Math.min(2 * Math.sqrt(s.evar[i]), yE * 1.2)));
+    ctx.closePath(); ctx.fillStyle = COL.blue; ctx.globalAlpha = 0.16; ctx.fill(); ctx.globalAlpha = 1;
+    ctx.beginPath();
+    for (let i = first; i <= k; i++) { const y = Y(2 * Math.sqrt(s.evar[i])); i === first ? ctx.moveTo(X(s.t[i]), y) : ctx.lineTo(X(s.t[i]), y); }
+    ctx.strokeStyle = COL.blue; ctx.globalAlpha = 0.45; ctx.lineWidth = 1; ctx.stroke();
+    ctx.beginPath();
+    for (let i = first; i <= k; i++) { const y = Y(-2 * Math.sqrt(s.evar[i])); i === first ? ctx.moveTo(X(s.t[i]), y) : ctx.lineTo(X(s.t[i]), y); }
+    ctx.stroke(); ctx.globalAlpha = 1;
+    ctx.beginPath();
+    for (let i = first; i <= k; i++) { const y = Y(s.est[i] - s.pos[i]); i === first ? ctx.moveTo(X(s.t[i]), y) : ctx.lineTo(X(s.t[i]), y); }
+    ctx.strokeStyle = COL.blue; ctx.lineWidth = 2; ctx.lineJoin = "round"; ctx.stroke();
+  }
+  for (let i = 0; i <= k; i++) if (!isNaN(s.meas[i])) dot(X(s.t[i]), Y(s.meas[i] - s.pos[i]), 4, COL.orange);
+  line(xn, B.y, xn, B.y + B.h, COL.ink2, 1);
+  if (S.hover >= 0 && S.hover <= k) line(X(s.t[S.hover]), B.y, X(s.t[S.hover]), B.y + B.h, COL.ink, 1, [3, 3]);
+  ctx.restore();
+}
+function drawVelocity(s, k) {
+  const { C: P } = L, T = s.t[s.n - 1] || 1, lo = S.vLo, hi = S.vHi, X = (t) => P.x + (t / T) * P.w, Y = (v) => P.y + P.h - ((v - lo) / (hi - lo)) * P.h;
+  const stp = niceStep(hi - lo, 4), ticks = []; for (let v = Math.ceil(lo / stp) * stp; v <= hi; v += stp) ticks.push(+v.toFixed(6));
+  ticks.zero = null; ticks.fmt = (v) => String(+v.toFixed(1));
+  plotFrame(P, L.narrow ? "VELOCITY (m/s), NEVER MEASURED" : "VELOCITY (m/s): the sensor never measures this", ticks, Y);
+  ctx.save(); ctx.beginPath(); ctx.rect(P.x, P.y - 2, P.w, P.h + 4); ctx.clip();
+  const xn = X(s.t[k]);
+  ctx.fillStyle = COL.surface2; ctx.globalAlpha = 0.55; ctx.fillRect(xn, P.y, P.x + P.w - xn, P.h); ctx.globalAlpha = 1;
+  ctx.lineJoin = "round";
+  ctx.beginPath(); for (let i = 0; i <= k; i++) { i ? ctx.lineTo(X(s.t[i]), Y(s.vel[i])) : ctx.moveTo(X(s.t[i]), Y(s.vel[i])); }
+  ctx.strokeStyle = COL.ink; ctx.lineWidth = 2; ctx.stroke();
+  ctx.beginPath(); let started = false;
+  for (let i = 0; i <= k; i++) { if (isNaN(s.evel[i])) continue; const x = X(s.t[i]), y = Y(s.evel[i]); started ? ctx.lineTo(x, y) : ctx.moveTo(x, y); started = true; }
+  ctx.strokeStyle = COL.blue; ctx.lineWidth = 2; ctx.stroke();
+  line(xn, P.y, xn, P.y + P.h, COL.ink2, 1);
+  if (S.hover >= 0 && S.hover <= k) line(X(s.t[S.hover]), P.y, X(s.t[S.hover]), P.y + P.h, COL.ink, 1, [3, 3]);
+  ctx.restore();
+}
+
+/* ---------- readouts ---------- */
+const setText = (id, v) => { const e = $(id); if (e.textContent !== v) e.textContent = v; };
+function setChip(id, ok, label) { const e = $(id); const cls = "chip " + (ok === null ? "na" : ok ? "ok" : "no"); const h = ok === null ? label : (ok ? "✓ " : "✕ ") + label; if (e.className !== cls) e.className = cls; if (e.textContent !== h) e.textContent = h; }
+function updateReadouts() {
+  const s = S.sim, k = Math.min(Math.floor(S.head), s.n - 1);
+  if (k === lastReadoutStep) return; lastReadoutStep = k;
+  setText("#clock", "step " + k + " · t = " + s.t[k].toFixed(1) + " s");
+  const sc = $("#scrub"); if (+sc.value !== k) sc.value = k;
+  // pipeline
+  setText("#v-truth", "x = " + s.pos[k].toFixed(1) + " m, v = " + s.vel[k].toFixed(1) + " m/s");
+  let recent = false; for (let i = Math.max(0, k - 6); i <= k; i++) if (!isNaN(s.meas[i])) recent = true;
+  setText("#v-sensor", !isNaN(s.meas[k]) ? "reading " + s.meas[k].toFixed(1) + " m" : recent ? "reading sent" : "no reading due");
+  setText("#v-filter", s.kind[k] === 0 ? "waiting for the first reading" : (s.kind[k] === 2 ? "predict, then update" : "predict only") + "\nx̂ = " + s.est[k].toFixed(1) + " ± " + (2 * Math.sqrt(s.evar[k])).toFixed(1) + " m");
+  $("#v-filter").style.whiteSpace = "pre-line";
+  setText("#v-rec", "row " + k + " of " + (s.n - 1) + " written");
+  $("#n-sensor").classList.toggle("on", recent); $("#n-filter").classList.toggle("on", s.kind[k] === 2 && recent);
+  $("#n-truth").classList.toggle("on", S.playing); $("#n-rec").classList.toggle("on", S.playing);
+  // metrics
+  const m = SimEngine.metricsUpTo(s, k);
+  if (!m || m.n < 2) { for (const id of ["#m-meas", "#m-est", "#m-ratio", "#m-cov", "#m-vel"]) setText(id, "—"); setChip("#m-ratio-chip", null, "needs two readings"); setChip("#m-cov-chip", null, "needs two readings"); }
+  else {
+    $("#m-meas").innerHTML = m.rmseMeas.toFixed(2) + "<small>m</small>"; $("#m-est").innerHTML = m.rmseEst.toFixed(2) + "<small>m</small>";
+    $("#m-vel").innerHTML = m.rmseVel.toFixed(2) + "<small>m/s</small>";
+    if (isNaN(m.ratio)) { setText("#m-ratio", "n/a"); setChip("#m-ratio-chip", null, "exact sensor"); }
+    else { setText("#m-ratio", m.ratio.toFixed(2)); setChip("#m-ratio-chip", m.ratio <= 0.75, m.ratio <= 0.75 ? "within the 0.75 limit" : "over the 0.75 limit"); }
+    setText("#m-cov", (m.coverage * 100).toFixed(0) + " %"); setChip("#m-cov-chip", m.coverage >= 0.9, m.coverage >= 0.9 ? "meets the 90 % limit" : "below the 90 % limit");
+  }
+  if ($("details.table").open) fillRows(s, k);
+  cv.setAttribute("aria-label", "Animated chart at step " + k + ". " + (m ? "Raw readings are off by " + m.rmseMeas.toFixed(1) + " m; the filter estimate by " + m.rmseEst.toFixed(1) + " m." : ""));
+}
+function fillRows(s, k) {
+  const rows = []; for (let i = k; i >= 0 && rows.length < 8; i--) if (!isNaN(s.meas[i])) rows.push(i);
+  $("#rows").innerHTML = rows.map((i) => `<tr><td class="n">${i}</td><td class="n">${s.t[i].toFixed(1)}</td><td class="n">${s.pos[i].toFixed(2)}</td><td class="n">${s.meas[i].toFixed(2)}</td><td class="n">${fmtErr(s.meas[i] - s.pos[i])}</td><td class="n">${s.est[i].toFixed(2)}</td><td class="n">${fmtErr(s.est[i] - s.pos[i])}</td><td class="n">${(2 * Math.sqrt(s.evar[i])).toFixed(2)}</td></tr>`).join("");
+}
+
+/* ---------- controls ---------- */
+const FMT = { sigma: (p) => p.sigma.toFixed(1) + " m", every: (p) => "every " + (p.every / 10).toFixed(1) + " s", accel: (p) => p.accel.toFixed(2) + " m/s²", r: (p) => Math.sqrt(p.r).toFixed(1) + " m", q: (p) => p.q.toFixed(2), seed: (p) => String(p.seed) };
+function syncControls() {
+  const p = S.p;
+  $("#k-sigma").value = p.sigma; $("#k-every").value = p.every; $("#k-accel").value = p.accel; $("#k-r").value = Math.sqrt(p.r); $("#k-q").value = p.q; $("#k-seed").value = p.seed;
+  for (const k of KEYS) $("#o-" + k).textContent = FMT[k](p);
+}
+function setPreset(id, restart) {
+  const pr = PRESETS.find((x) => x.id === id); S.preset = id;
+  S.p = { ...REF, ...pr.p };
+  if (restart) { S.head = 0; S.playing = true; setPlayUI(); }
+  syncControls(); rebuild();
+  document.querySelectorAll("#presets .btn").forEach((b) => b.setAttribute("aria-pressed", b.dataset.id === id ? "true" : "false"));
+  $("#presetNote").innerHTML = pr.note;
+}
+function customised() {
+  S.preset = "custom"; document.querySelectorAll("#presets .btn").forEach((b) => b.setAttribute("aria-pressed", "false"));
+  $("#presetNote").innerHTML = S.recorded ? PRESETS[0].note : "<b>Your own settings.</b> The browser model reruns the whole experiment with these values. Drag across the lower charts to scrub, or press <i>Back to the recorded run</i> to compare with the real program's output.";
+}
+function bind(id, key, conv) {
+  $(id).addEventListener("input", (e) => { const v = parseFloat(e.target.value); if (isNaN(v)) return; S.p[key] = conv ? conv(v) : v; syncControls(); rebuild(); customised(); });
+}
+bind("#k-sigma", "sigma"); bind("#k-every", "every"); bind("#k-accel", "accel"); bind("#k-r", "r", (v) => v * v); bind("#k-q", "q");
+$("#k-seed").addEventListener("change", (e) => { const v = Math.max(0, Math.floor(+e.target.value) || 0); S.p.seed = v; syncControls(); rebuild(); customised(); });
+$("#reseed").addEventListener("click", () => { S.p.seed = Math.floor(Math.random() * 100000); syncControls(); rebuild(); customised(); });
+$("#resetRef").addEventListener("click", () => setPreset("reference", true));
+function updateSourceUI() {
+  const rec = S.recorded; const c = $("#srcChip");
+  c.className = "chip " + (rec ? "ok" : "na"); c.textContent = rec ? "Recorded C++ run" : "In-browser model";
+  $("#srcText").textContent = rec ? "The estimate is the C++ program's own output (seed 42, " + C.compiler + ")." : "Same equations as the C++ program, run in your browser with its own random numbers.";
+  $("#resetRef").hidden = rec;
+}
+function setPlayUI() { const b = $("#play"); b.innerHTML = S.playing ? "❚❚ Pause" : "▶ Play"; b.setAttribute("aria-label", S.playing ? "Pause" : "Play"); }
+$("#play").addEventListener("click", () => { if (!S.playing && S.head >= S.sim.n - 1) S.head = 0; S.playing = !S.playing; setPlayUI(); lastReadoutStep = -2; });
+$("#replay").addEventListener("click", () => { S.head = 0; S.playing = true; setPlayUI(); needsDraw = true; });
+$("#scrub").addEventListener("input", (e) => { S.head = +e.target.value; needsDraw = true; lastReadoutStep = -2; });
+document.querySelectorAll('input[name="speed"]').forEach((r) => r.addEventListener("change", () => { S.speed = +r.value; }));
+document.querySelector("details.table").addEventListener("toggle", () => { lastReadoutStep = -2; });
+
+// hover tooltip and click-to-scrub on the two lower charts
+const tip = $("#tip");
+function stepAt(x, y) {
+  const { B, C: P } = L; if (x < B.x || x > B.x + B.w) return -1;
+  if (!((y >= B.y && y <= B.y + B.h) || (y >= P.y && y <= P.y + P.h))) return -1;
+  return clamp(Math.round(((x - B.x) / B.w) * (S.sim.n - 1)), 0, S.sim.n - 1);
+}
+cv.addEventListener("pointermove", (e) => {
+  const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top, i = stepAt(x, y), s = S.sim, k = Math.floor(S.head);
+  if (i >= 0 && (e.buttons & 1)) { S.head = i; S.hover = i; needsDraw = true; lastReadoutStep = -2; }
+  if (i < 0 || i > k) { if (S.hover !== -1) { S.hover = -1; needsDraw = true; } tip.hidden = true; return; }
+  S.hover = i; needsDraw = true;
+  let h = "t = " + s.t[i].toFixed(1) + " s<br>truth " + s.pos[i].toFixed(1) + " m, " + s.vel[i].toFixed(1) + " m/s";
+  if (!isNaN(s.meas[i])) h += "<br>reading " + fmtErr(s.meas[i] - s.pos[i]) + " m off";
+  if (!isNaN(s.est[i])) h += "<br>estimate " + fmtErr(s.est[i] - s.pos[i]) + " m off (±" + (2 * Math.sqrt(s.evar[i])).toFixed(1) + " bars)<br>est. speed " + s.evel[i].toFixed(1) + " m/s";
+  tip.innerHTML = h; tip.hidden = false;
+  tip.style.left = clamp(x + 14, 4, L.w - 220) + "px"; tip.style.top = clamp(y - 30, 4, L.H - 90) + "px";
+});
+cv.addEventListener("pointerdown", (e) => { const r = cv.getBoundingClientRect(), i = stepAt(e.clientX - r.left, e.clientY - r.top); if (i >= 0) { S.head = i; needsDraw = true; lastReadoutStep = -2; } });
+cv.addEventListener("pointerleave", () => { S.hover = -1; tip.hidden = true; needsDraw = true; });
+
+/* ---------- one update (Gaussian blend) ---------- */
+const bc = $("#bell"), bctx = bc.getContext("2d");
+const BELL = { sp: 6, sr: 5, stage: 2, auto: !reduceMotion, t0: performance.now() - 1000 };
+let bellDirty = true, bellVisible = true, BL = null;
+function bellLayout() {
+  const w = bc.parentElement.clientWidth, h = w < 560 ? 230 : 270, dpr = Math.min(2, window.devicePixelRatio || 1);
+  bc.width = Math.round(w * dpr); bc.height = Math.round(h * dpr); bc.style.height = h + "px"; bctx.setTransform(dpr, 0, 0, dpr, 0, 0); BL = { w, h }; bellDirty = true;
+}
+function setBellStage(n) { BELL.stage = n; BELL.t0 = performance.now(); document.querySelectorAll("#bellSteps [data-s]").forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.s === n))); bellDirty = true; }
+function drawBell(now) {
+  const { w, h } = BL, c = bctx, u = clamp((now - BELL.t0) / 900, 0, 1), e = u * u * (3 - 2 * u), st = BELL.stage;
+  const mu = 40, z = 58, sp = BELL.sp, sr = BELL.sr, K = (sp * sp) / (sp * sp + sr * sr), mu2 = mu + K * (z - mu), s2 = Math.sqrt((sp * sp * sr * sr) / (sp * sp + sr * sr));
+  const spNow = st === 0 ? lerp(sp * 0.55, sp, e) : sp;
+  const aRead = st === 0 ? 0 : st === 1 ? e : 1, aPost = st === 2 ? e : 0, aPrior = st === 2 ? lerp(1, 0.6, e) : 1;
+  const x0 = 14, x1 = w - 14, base = h - 30, top = 46, X = (m) => x0 + (m / 100) * (x1 - x0);
+  const ymax = 1.12 / (Math.min(sp * 0.55, s2, sr) * 2.5066), Y = (p) => base - (p / ymax) * (base - top);
+  c.clearRect(0, 0, w, h);
+  c.font = MONO; c.textBaseline = "alphabetic";
+  c.fillStyle = COL.ink3; c.textAlign = "left"; c.fillText("POSITION (m)", x0, 12);
+  c.strokeStyle = COL.line; c.lineWidth = 1; c.beginPath(); c.moveTo(x0, base); c.lineTo(x1, base); c.stroke();
+  for (let m = 0; m <= 100; m += 10) { c.fillStyle = COL.ink3; c.textAlign = "center"; c.fillText(String(m), X(m), base + 17); c.beginPath(); c.moveTo(X(m), base); c.lineTo(X(m), base + 4); c.stroke(); }
+  const bell = (m, sd, col, alpha, fill, dash, lw) => {
+    c.beginPath(); for (let i = 0; i <= 200; i++) { const mm = (i / 200) * 100, p = Math.exp(-0.5 * ((mm - m) / sd) ** 2) / (sd * 2.5066); i ? c.lineTo(X(mm), Y(p)) : c.moveTo(X(mm), Y(p)); }
+    c.globalAlpha = alpha; c.strokeStyle = col; c.lineWidth = lw; c.setLineDash(dash || []); c.stroke(); c.setLineDash([]);
+    if (fill) { c.lineTo(X(100), base); c.lineTo(X(0), base); c.closePath(); c.globalAlpha = alpha * 0.18; c.fillStyle = col; c.fill(); }
+    c.globalAlpha = 1;
+  };
+  const mark = (m, label, col, alpha, yy) => { c.globalAlpha = alpha; c.strokeStyle = col; c.setLineDash([3, 3]); c.beginPath(); c.moveTo(X(m), yy + 4); c.lineTo(X(m), base); c.stroke(); c.setLineDash([]); c.fillStyle = COL.ink; c.textAlign = "center"; c.fillText(label, clamp(X(m), 44, w - 44), yy); c.globalAlpha = 1; };
+  if (aRead > 0) { bell(z, sr, COL.orange, aRead, true, null, 2.5); mark(z, "reading", COL.orange, aRead, 16); }
+  bell(mu, spNow, COL.blue, aPrior, true, st === 2 ? [6, 4] : null, st === 2 ? 1.8 : 2.5); mark(mu, st === 0 ? "guess, moved forward" : "guess", COL.blue, aPrior, 16);
+  if (aPost > 0) {
+    bell(mu2, s2, COL.blue, aPost, true, null, 3); mark(mu2, "new estimate", COL.blue, aPost, 34);
+    c.globalAlpha = aPost; c.strokeStyle = COL.ink; c.lineWidth = 1.5; const ay = base - 14; c.beginPath(); c.moveTo(X(mu), ay); c.lineTo(X(mu2) - 4, ay); c.stroke(); c.beginPath(); c.moveTo(X(mu2) - 4, ay); c.lineTo(X(mu2) - 10, ay - 4); c.lineTo(X(mu2) - 10, ay + 4); c.closePath(); c.fillStyle = COL.ink; c.fill(); c.globalAlpha = 1;
+  }
+  const out = [
+    "<b>Predict.</b> Time passes. The guess moves forward by velocity × time, and the filter becomes less sure of it: the blue curve widens to ±" + sp.toFixed(1) + " m.",
+    "<b>A reading arrives.</b> The sensor says " + z + " m, with noise of ±" + sr.toFixed(1) + " m. The guess is " + mu + " m. They disagree by " + (z - mu) + " m.",
+    "<b>Update.</b> The filter's gain is " + K.toFixed(2) + " = doubt² ÷ (doubt² + sensor noise²), so it moves " + Math.round(K * 100) + " % of the way from the guess to the reading, to " + mu2.toFixed(1) + " m. The doubt shrinks from ±" + sp.toFixed(1) + " m to ±" + s2.toFixed(1) + " m, narrower than either input.",
+  ][st];
+  if ($("#bellOut").innerHTML !== out) $("#bellOut").innerHTML = out;
+  $("#b-sp-o").textContent = "±" + sp.toFixed(1) + " m"; $("#b-sr-o").textContent = "±" + sr.toFixed(1) + " m";
+  bellDirty = u < 1;
+}
+document.querySelectorAll("#bellSteps [data-s]").forEach((b) => b.addEventListener("click", () => { BELL.auto = false; $("#bellAuto").checked = false; setBellStage(+b.dataset.s); }));
+$("#bellAuto").checked = BELL.auto;
+$("#bellAuto").addEventListener("change", (e) => { BELL.auto = e.target.checked; BELL.t0 = performance.now(); });
+$("#b-sp").addEventListener("input", (e) => { BELL.sp = +e.target.value; bellDirty = true; });
+$("#b-sr").addEventListener("input", (e) => { BELL.sr = +e.target.value; bellDirty = true; });
+
+/* ---------- main loop ---------- */
+let last = performance.now(), tick = 0;
+function frame(now) {
+  const dtw = Math.min(0.1, (now - last) / 1000); last = now; tick++;
+  if (S.playing && visible) {
+    S.head += dtw * S.speed * 10;
+    if (S.head >= S.sim.n - 1) { S.head = S.sim.n - 1; S.playing = false; setPlayUI(); lastReadoutStep = -2; }
+    needsDraw = true;
+  }
+  if (needsDraw && visible) { draw(); updateReadouts(); needsDraw = false; }
+  if (bellVisible) {
+    if (BELL.auto && now - BELL.t0 > 3200) setBellStage((BELL.stage + 1) % 3);
+    if (bellDirty) drawBell(now);
+  }
+  requestAnimationFrame(frame);
+}
+new IntersectionObserver((en) => { visible = en[0].isIntersecting; if (visible) needsDraw = true; }, { rootMargin: "100px" }).observe(cv);
+new IntersectionObserver((en) => { bellVisible = en[0].isIntersecting; if (bellVisible) { bellDirty = true; BELL.t0 = Math.max(BELL.t0, performance.now() - 1000); } }, { rootMargin: "100px" }).observe(bc);
+let lastW = 0;
+new ResizeObserver(() => { const w = document.body.clientWidth; if (w === lastW) return; lastW = w; layout(); bellLayout(); renderSeedCharts(); }).observe(document.body);
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { readColors(); renderSeedCharts(); });
+new MutationObserver(() => { readColors(); renderSeedCharts(); }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+/* ---------- modules ---------- */
+const CODE = {
+  dyn: `TrueState propagate(const TrueState& prev, const DynamicsConfig& cfg, std::int64_t k) {
+    // Explicit Euler: position advances with the OLD velocity, then velocity is updated.
+    // With accel_mps2 == 0 the velocity never changes, so this is exact (SIM-003).
+    return TrueState{static_cast<double>(k) * cfg.dt_s,
+                     prev.position_m + prev.velocity_mps * cfg.dt_s,
+                     prev.velocity_mps + cfg.accel_mps2 * cfg.dt_s};
+}`,
+  sen: `std::optional<Measurement> NoisySensor::observe(const TrueState& truth, std::int64_t step) {
+    if (step % cfg_.every_n_steps != 0) {
+        return std::nullopt;
+    }
+    const double noise_m = cfg_.sigma_m * unit_normal_(rng_);
+    return Measurement{truth.t_s, truth.position_m + noise_m, cfg_.sensor_id};
+}`,
+  est: `KalmanState kalman_update(const KalmanState& s, double z_m, double r_m2) {
+    const Vec2 H{1.0, 0.0};                     // the sensor reads position only
+    const double innovation = z_m - s.x.v0;     // y: how far off the prediction was
+    const double S = s.P.m00 + r_m2;            // how much the innovation is expected to vary
+    const Vec2 K{s.P.m00 / S, s.P.m10 / S};     // gain: how far to move each of position, velocity
+    const Mat2 IKH = identity() - outer(K, H);
+    return KalmanState{s.x + innovation * K,
+                       IKH * s.P * transpose(IKH) + r_m2 * outer(K, K)};
+}`,
+  run: `for (std::int64_t k = 0; k <= cfg.steps; ++k) {
+    if (k > 0) {
+        truth = propagate(truth, cfg, k);
+    }
+    // The sensor decides whether a reading is due (DD-002). The estimator only ever
+    // receives \`meas\`, never \`truth\` (SYS-002).
+    const std::optional<Measurement> meas = sensor.observe(truth, k);
+
+    if (!estimator.initialized()) {
+        if (meas) {
+            est = estimator.initialize(*meas);  // no predict on the first reading (EST-009)
+        }
+    } else {
+        est = estimator.predict(cfg.dt_s);
+        if (meas) {
+            est = estimator.update(*meas);
+        }
+    }
+    recorder.write_row(k, truth, meas, est);
+}`,
+  rec: `step,t_s,true_pos_m,true_vel_mps,meas_pos_m,est_pos_m,est_vel_mps,est_pos_var_m2,est_vel_var_m2s2
+0,0,0,10,3.5249413321042993,3.5249413321042993,0,25,100
+1,0.10000000000000001,1,10,,3.5249413321042993,0,26.000033333333334,100.01000000000001
+2,0.20000000000000001,2,10,,3.5249413321042993,0,29.000266666666672,100.02000000000001
+
+// run.csv.config.json, written next to the CSV so a run can be reproduced
+{ "steps": 1000, "dt_s": 0.1, "sigma_m": 5, "seed": 42, "meas_every": 5,
+  "est_q_m2ps3": 0.1, "est_r_m2": 25, "compiler": "gcc 13.3.0", ... }`,
+  ana: `# python/kalman_oracle.py: independent re-computation of the filter's output (VAL-04)
+#   * rebuilds the est_* columns from ONLY the meas_pos_m readings and the recorded settings
+#   * never looks at the truth columns and never imports the C++
+#   * computes in 60-digit decimal arithmetic on the exact values of the doubles the C++ was given
+
+// metrics.json from the reference run (python/analyze.py)
+{ "n_rows": 1001, "n_measurements": 201, "rmse_meas_pos_m": 5.4598541120696265,
+  "rmse_est_pos_m": 2.32142058992441, "rmse_est_vel_mps": 1.2027805245829981,
+  "improvement_ratio": 0.42517996676736225, "frac_pos_within_2sigma": 0.9402985074626866 }`,
+};
+const MODS = [
+  { id: "dyn", name: "Truth model", file: "src/dynamics.cpp", lang: "C++",
+    what: "Moves the real object forward one 0.1 s step at a time, along one line, at constant speed or with a fixed acceleration. This is the answer key.",
+    why: "Time is computed as step × dt, never accumulated, so a long run does not drift. With zero acceleration the maths is exact.",
+    ids: ["SIM-001", "SIM-002", "SIM-003", "SIM-004"] },
+  { id: "sen", name: "Noisy sensor", file: "src/sensor.cpp", lang: "C++",
+    what: "Reports the object's position plus random error, but only every few steps. Seeded, so the same seed always gives the same readings.",
+    why: "The sensor has no velocity field at all: speed can never leak through. The truth goes in, a reading, or nothing, comes out.",
+    ids: ["SEN-001", "SEN-003", "SEN-004", "SEN-006"] },
+  { id: "est", name: "Kalman filter", file: "src/kalman.cpp", lang: "C++",
+    what: "Keeps a best guess of position and velocity plus how unsure it is (a 2×2 covariance). Predict moves the guess forward; update blends in a reading.",
+    why: "The two steps are pure functions with no stored state, which is what lets a hand calculation and an independent Python version check the same maths. The covariance update uses the numerically safer Joseph form.",
+    ids: ["EST-001", "EST-002", "EST-009", "EST-011", "EST-012"] },
+  { id: "run", name: "Runner", file: "src/runner.cpp", lang: "C++",
+    what: "The whole simulation loop. It calls the truth model, the sensor, the filter and the recorder in a fixed order.",
+    why: "It is the only place that holds the truth, and it passes the filter a reading, never the truth. A compile-time check and a test enforce that.",
+    ids: ["RUN-001", "SYS-002", "EST-002"] },
+  { id: "rec", name: "Recorder", file: "src/recorder.cpp", lang: "CSV",
+    what: "Writes one CSV row per step with 17-digit numbers, and a small JSON file next to it recording every setting, the seed and the build.",
+    why: "Reproducibility: anyone can rerun from the sidecar and get a byte-identical file. The analysis refuses a CSV whose sidecar is missing or mismatched.",
+    ids: ["OUT-001", "OUT-002", "OUT-003", "SEN-004"] },
+  { id: "ana", name: "Analysis and oracle", file: "python/analyze.py", lang: "Python",
+    what: "Scores the run: error of the raw readings against error of the estimate, velocity error, and how often the truth sits inside the filter's own error bars. A second program re-derives the filter independently.",
+    why: "The scoring and the cross-check are separate programs in a different language, so a mistake in the C++ cannot hide behind a matching mistake in the test.",
+    ids: ["ANA-001", "ANA-002", "ANA-004", "EST-012"] },
+];
+function renderModules() {
+  const tabs = $("#modTabs"); tabs.innerHTML = MODS.map((m, i) => `<button role="tab" id="tab-${m.id}" aria-selected="${i === 0}" aria-controls="modPanel" data-i="${i}" tabindex="${i === 0 ? 0 : -1}">${m.name}<span class="f">${m.file}</span></button>`).join("");
+  const show = (i) => {
+    const m = MODS[i];
+    tabs.querySelectorAll("[role=tab]").forEach((t, j) => { t.setAttribute("aria-selected", j === i); t.tabIndex = j === i ? 0 : -1; });
+    const code = CODE[m.id].replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/^(\s*(?:\/\/|#).*)$/gm, '<span class="cm">$1</span>').replace(/(\/\/ [^\n<]*)$/gm, '<span class="cm">$1</span>');
+    $("#modPanel").setAttribute("aria-labelledby", "tab-" + m.id);
+    $("#modPanel").innerHTML = `<div><h3>${m.name}</h3><p>${m.what}</p></div><p style="color:var(--ink2)"><b style="color:var(--ink)">Why it is built this way.</b> ${m.why}</p>
+      <pre class="code">${code}</pre><div><span class="eyebrow">Requirements it answers to</span><div class="ids" style="margin-top:8px">${m.ids.filter((id) => DATA.reqs[id]).map((id) => `<button class="idchip" type="button" data-id="${id}">${id}</button>`).join("")}</div></div>
+      <a class="src-link" href="${GH}${m.file}">${m.file} on GitHub →</a>`;
+    $("#modPanel").querySelectorAll(".idchip").forEach((b) => b.addEventListener("click", () => { selectReq(b.dataset.id); $("#trace").scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth" }); }));
+  };
+  tabs.addEventListener("click", (e) => { const b = e.target.closest("[role=tab]"); if (b) show(+b.dataset.i); });
+  tabs.addEventListener("keydown", (e) => {
+    const cur = +document.activeElement.dataset.i; if (isNaN(cur)) return; let n = cur;
+    if (e.key === "ArrowDown" || e.key === "ArrowRight") n = (cur + 1) % MODS.length; else if (e.key === "ArrowUp" || e.key === "ArrowLeft") n = (cur + MODS.length - 1) % MODS.length; else return;
+    e.preventDefault(); show(n); tabs.children[n].focus();
+  });
+  show(0);
+}
+
+/* ---------- seed charts ---------- */
+const SEEDS = DATA.seeds; // [seed, raw rmse, est rmse, ratio, coverage]
+let seedHover = -1, seedGeom = null;
+function renderSeedCharts() {
+  const host = $("#ch1"); if (!host) return;
+  const w = host.clientWidth || 600; if (!w) return;
+  const ml = 40, mr = 8, mt = 10, mb = 22, h = 170, pw = w - ml - mr, ph = h - mt - mb, n = SEEDS.length, slot = pw / n;
+  seedGeom = { ml, pw, slot, n };
+  const ratios = SEEDS.map((r) => r[3]), covs = SEEDS.map((r) => r[4]);
+  const meanR = ratios.reduce((a, b) => a + b, 0) / n, worst = ratios.indexOf(Math.max(...ratios)), meanC = covs.reduce((a, b) => a + b, 0) / n, lowC = covs.indexOf(Math.min(...covs));
+  $("#cap1").innerHTML = `Each bar is one seed: the estimate's error divided by the raw readings' error. Mean <b>${meanR.toFixed(2)}</b>, worst <b>${ratios[worst].toFixed(2)}</b> (seed ${SEEDS[worst][0]}). All ${n} stay under the 0.75 limit.`;
+  $("#cap2").innerHTML = `Each dot is the share of true positions that fall inside the filter's own ±2σ bars. A perfect filter scores about 0.95. Pooled <b>${(meanC * 100).toFixed(1)} %</b>; lowest <b>${covs[lowC].toFixed(2)}</b>. The limit is 0.90.`;
+  const XS = (i) => ml + (i + 0.5) * slot, guide = `<line class="guide" x1="0" x2="0" y1="${mt}" y2="${mt + ph}" stroke="var(--ink3)" stroke-dasharray="3 3" visibility="hidden"/>`;
+  const Y1 = (v) => mt + ph - (v / 1) * ph;
+  let s1 = `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Bar chart of the error ratio for each of ${n} held-out seeds, all below the 0.75 limit">`;
+  for (const v of [0, 0.25, 0.5, 0.75, 1]) s1 += `<line class="ax" x1="${ml}" x2="${ml + pw}" y1="${Y1(v)}" y2="${Y1(v)}"/><text x="${ml - 6}" y="${Y1(v) + 4}" text-anchor="end">${v.toFixed(2)}</text>`;
+  const bw = Math.max(3, slot * 0.68);
+  SEEDS.forEach((r, i) => { const y = Y1(r[3]); s1 += `<path d="M${XS(i) - bw / 2},${mt + ph} V${y + 3} a3,3 0 0 1 3,-3 h${bw - 6} a3,3 0 0 1 3,3 V${mt + ph} Z" fill="var(--blue)"/>`; });
+  s1 += `<line x1="${ml}" x2="${ml + pw}" y1="${Y1(0.75)}" y2="${Y1(0.75)}" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="6 4"/><text x="${ml + pw}" y="${Y1(0.75) - 6}" text-anchor="end" style="fill:var(--ink)">limit 0.75 (EST-008)</text>`;
+  const wx = clamp(XS(worst), ml + 50, ml + pw - 50);
+  s1 += `<text x="${wx}" y="${Y1(ratios[worst]) - 7}" text-anchor="middle" style="fill:var(--ink)">worst ${ratios[worst].toFixed(2)}</text>`;
+  s1 += `<text x="${ml}" y="${h - 4}">seed ${SEEDS[0][0]}</text><text x="${ml + pw}" y="${h - 4}" text-anchor="end">seed ${SEEDS[n - 1][0]}</text>${guide}</svg>`;
+  $("#ch1").innerHTML = s1;
+  const lo = 0.85, hi = 1, Y2 = (v) => mt + ph - ((v - lo) / (hi - lo)) * ph;
+  let s2 = `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Dot chart of the share of errors inside the filter's own error bars for each seed, all above the 0.90 limit">`;
+  for (const v of [0.85, 0.9, 0.95, 1]) s2 += `<line class="ax" x1="${ml}" x2="${ml + pw}" y1="${Y2(v)}" y2="${Y2(v)}"/><text x="${ml - 6}" y="${Y2(v) + 4}" text-anchor="end">${v.toFixed(2)}</text>`;
+  s2 += `<line x1="${ml}" x2="${ml + pw}" y1="${Y2(0.9)}" y2="${Y2(0.9)}" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="6 4"/><text x="${ml + pw}" y="${Y2(0.9) + 15}" text-anchor="end" style="fill:var(--ink)">limit 0.90 (EST-012)</text>`;
+  s2 += `<text x="${ml + 2}" y="${Y2(0.95) + 14}">perfect filter ≈ 0.95</text><line x1="${ml}" x2="${ml + pw}" y1="${Y2(0.95)}" y2="${Y2(0.95)}" stroke="var(--ink3)" stroke-dasharray="2 4"/>`;
+  SEEDS.forEach((r, i) => { s2 += `<circle cx="${XS(i)}" cy="${Y2(r[4])}" r="4" fill="var(--blue)" stroke="var(--surface)" stroke-width="1.5"/>`; });
+  s2 += `<text x="${ml}" y="${h - 4}">seed ${SEEDS[0][0]}</text><text x="${ml + pw}" y="${h - 4}" text-anchor="end">seed ${SEEDS[n - 1][0]}</text>${guide}</svg>`;
+  $("#ch2").innerHTML = s2;
+}
+function seedMove(e) {
+  if (!seedGeom) return;
+  const svg = e.currentTarget.querySelector("svg"), r = svg.getBoundingClientRect(), x = e.clientX - r.left, i = clamp(Math.floor((x - seedGeom.ml) / seedGeom.slot), 0, seedGeom.n - 1);
+  const inside = x >= seedGeom.ml && x <= seedGeom.ml + seedGeom.pw, t = $("#tip2");
+  document.querySelectorAll("#seedCharts .guide").forEach((g) => { g.setAttribute("x1", seedGeom.ml + (i + 0.5) * seedGeom.slot); g.setAttribute("x2", seedGeom.ml + (i + 0.5) * seedGeom.slot); g.setAttribute("visibility", inside ? "visible" : "hidden"); });
+  if (!inside) { t.hidden = true; return; }
+  const d = SEEDS[i], host = $("#seedCharts").getBoundingClientRect();
+  t.innerHTML = `seed ${d[0]}<br>raw error ${d[1].toFixed(2)} m<br>estimate error ${d[2].toFixed(2)} m<br>ratio ${d[3].toFixed(3)}<br>inside bars ${(d[4] * 100).toFixed(1)} %`;
+  t.hidden = false; t.style.left = clamp(e.clientX - host.left + 14, 4, host.width - 190) + "px"; t.style.top = clamp(e.clientY - host.top - 70, 4, host.height - 110) + "px";
+}
+function seedLeave() { $("#tip2").hidden = true; document.querySelectorAll("#seedCharts .guide").forEach((g) => g.setAttribute("visibility", "hidden")); }
+["#ch1", "#ch2"].forEach((id) => { $(id).addEventListener("pointermove", seedMove); $(id).addEventListener("pointerleave", seedLeave); });
+
+/* ---------- traceability ---------- */
+const GROUPS = [["SYS", "System"], ["SIM", "Truth model"], ["SEN", "Sensor"], ["EST", "Estimator"], ["CFG", "Settings"], ["RUN", "Runner"], ["OUT", "Output files"], ["ANA", "Analysis"], ["NFR", "Quality rules"], ["TST", "Testing"], ["DOC", "Documents"]];
+const METHOD = { T: "test", I: "inspection", D: "demonstration", A: "analysis" }, PRI = { M: "Must", S: "Should", C: "Could" };
+const REQS = DATA.reqs; let selReq = "EST-008";
+function renderTrace() {
+  const ids = Object.keys(REQS), musts = ids.filter((i) => REQS[i].pri === "M"), covered = musts.filter((i) => REQS[i].tests.length), tests = new Set(ids.flatMap((i) => REQS[i].tests.map((t) => t[0] + "::" + t[1])));
+  $("#traceIntro").innerHTML = `The project registers <b>${ids.length}</b> requirements. <b>${covered.length} of ${musts.length}</b> Must requirements are cited by at least one test, and the build fails if that stops being true. Click any square to see its wording and the tests that cite it. ${ids.length - ids.filter((i) => REQS[i].tests.length).length} lower-priority items have no test yet, marked with a dashed outline.`;
+  const q = ($("#req-search").value || "").trim().toLowerCase();
+  $("#reqGrid").innerHTML = GROUPS.map(([p, label]) => {
+    const g = ids.filter((i) => i.startsWith(p + "-")); if (!g.length) return "";
+    return `<div class="grp"><div class="gl"><b style="color:var(--ink)">${p}</b> ${label}</div><div class="cells">${g.map((i) => {
+      const r = REQS[i], hit = !q || i.toLowerCase().includes(q) || r.text.toLowerCase().includes(q);
+      return `<button type="button" class="cell${r.pri === "M" ? "" : " opt"}${r.tests.length ? "" : " none"}${hit ? "" : " dim"}" data-id="${i}" aria-pressed="${i === selReq}" aria-label="${i}, ${PRI[r.pri]}, ${r.tests.length} tests">${i.slice(4)}</button>`;
+    }).join("")}</div></div>`;
+  }).join("");
+  const r = REQS[selReq], meth = r.method.split(/[ ,]+/).map((m) => METHOD[m]).filter(Boolean).join(" and ") || "see baseline";
+  $("#reqBox").innerHTML = `<div class="rid">${selReq}</div><div style="display:flex;gap:8px;flex-wrap:wrap"><span class="chip ${r.pri === "M" ? "ok" : "na"}">${PRI[r.pri]} requirement</span><span class="chip na">checked by ${meth}</span></div>
+    <p class="txt">${(r.text || "").replace(/&/g, "&amp;").replace(/</g, "&lt;")}</p>
+    ${r.tests.length ? `<div><span class="eyebrow">${r.tests.length} test${r.tests.length > 1 ? "s" : ""} cite it</span><ul style="margin-top:8px">${r.tests.map((t) => `<li><code>${t[1]}</code><a href="${GH}${t[0]}">${t[0]}</a></li>`).join("")}</ul></div>` : `<p class="chip no">No test cites this requirement yet</p>`}`;
+  $("#reqGrid").querySelectorAll(".cell").forEach((b) => b.addEventListener("click", () => selectReq(b.dataset.id)));
+}
+function selectReq(id) { if (REQS[id]) { selReq = id; renderTrace(); } }
+$("#req-search").addEventListener("input", renderTrace);
+
+/* ---------- limits ---------- */
+// From docs/VALIDATION.md section 3 (200 tuning seeds, report only).
+const LIMITS = [
+  ["S-ACCEL-SMALL", "accel", "Object accelerates a little (0.1 m/s²)", 0.46, 0.957, true, true, "Still helps, and its bars stay honest.", "accel1"],
+  ["S-ACCEL-LARGE", "accel", "Object accelerates a lot (0.5 m/s²)", 1.05, 0.423, false, false, "The filter's model is wrong, so it is no better than the raw readings.", "accel"],
+  ["S-HIGH-NOISE", "noisy", "Sensor noise 20 m, filter told", 0.34, 0.959, true, true, "A noisier sensor gives a larger improvement.", "noisy20"],
+  ["S-SPARSE", "sparse", "One reading every 5 s", 0.81, 0.963, false, true, "Honest, but there is little to average, so it helps much less.", "sparse"],
+  ["S-WRONG-R", "overconfident", "Filter told the sensor noise is 1 m, not 5 m", 0.57, 0.346, true, false, "The error looks fine but the bars are far too narrow.", "overconfident"],
+];
+const TRY = { accel1: { accel: 0.1 }, accel: { accel: 0.5 }, noisy20: { sigma: 20, r: 400 }, sparse: { every: 50 }, overconfident: { r: 1 } };
+$("#limRows").innerHTML = LIMITS.map((l) => `<tr><td><b>${l[2]}</b><br><span class="mono" style="font-size:11.5px;color:var(--ink3)">${l[0]}</span></td><td class="n">${l[3].toFixed(2)}</td><td class="n">${(l[4] * 100).toFixed(0)} %</td>
+  <td><span class="verdict ${l[5] ? "pass" : "fail"}">${l[5] ? "✓ yes" : "✕ no"}</span></td><td><span class="verdict ${l[6] ? "pass" : "fail"}">${l[6] ? "✓ yes" : "✕ no"}</span></td><td>${l[7]}</td>
+  <td><button class="btn try" type="button" data-t="${l[8]}">Try it ↑</button></td></tr>`).join("");
+document.querySelectorAll(".try").forEach((b) => b.addEventListener("click", () => {
+  S.p = { ...REF, ...TRY[b.dataset.t] }; S.head = 0; S.playing = true; setPlayUI(); syncControls(); rebuild(); customised();
+  $("#presetNote").innerHTML = "<b>Scenario from the validation record.</b> Compare the tiles and the bars with the table: the demo uses one random seed, the table averages 200, so single runs vary.";
+  $("#lab").scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth" });
+}));
+
+/* ---------- misc ---------- */
+$("#presets").innerHTML = PRESETS.map((p) => `<button class="btn" type="button" data-id="${p.id}" aria-pressed="false">${p.name}</button>`).join("");
+$("#presets").addEventListener("click", (e) => { const b = e.target.closest("[data-id]"); if (b) setPreset(b.dataset.id, true); });
+$("#copyCmd").addEventListener("click", async () => {
+  const el = $("#cmd"), b = $("#copyCmd");
+  try { await navigator.clipboard.writeText(el.textContent); b.textContent = "Copied"; }
+  catch (_) { const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); b.textContent = "Selected, press copy"; }
+  setTimeout(() => { b.textContent = "Copy"; }, 2000);
+});
+// Check 4: this page's own filter, fed the C++ run's readings, against the C++ estimates.
+(function parity() {
+  const s = SimEngine.simulate(REF, DATA.run.meas); let d = 0;
+  for (let i = 0; i < s.n; i++) d = Math.max(d, Math.abs(s.est[i] - DATA.run.est[i]), Math.abs(s.evel[i] - DATA.run.vel[i]));
+  $("#parity").innerHTML = `This page re-implements the filter in JavaScript. Fed the C++ run's 201 readings, its estimates differ from the C++ output by at most <b>${d < 1e-6 ? "less than 0.000001 m" : d.toExponential(1) + " m"}</b> across all ${s.n} steps (the stored values are rounded to six decimals).`;
+})();
+
+readColors(); layout(); bellLayout(); renderModules(); renderTrace(); renderSeedCharts();
+setPreset("reference", false); setPlayUI();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

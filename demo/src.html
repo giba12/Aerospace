@@ -1,0 +1,1064 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>sensor-sim Walkthrough</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one reading column of sections; the lab is the wide centrepiece. Data colours are fixed by role
+   everywhere: ink = truth, orange = raw sensor readings, blue = the filter's estimate. */
+:root {
+  --bg: #f3f5f8; --surface: #ffffff; --surface2: #e9edf3; --ink: #0e1a2b; --ink2: #46546a; --ink3: #5b687c;
+  --line: #d3dae5; --blue: #2a78d6; --blue-ink: #1b5aa8; --orange: #eb6834; --orange-ink: #b04418;
+  --good: #16794c; --good-bg: #e0f3e8; --bad: #b3261e; --bad-bg: #fbe8e5; --code-bg: #0f1d33; --code-ink: #dbe6f5; --code-dim: #8da2c0;
+  --font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0b121d; --surface: #121b2a; --surface2: #1a2639; --ink: #e9eef6; --ink2: #b3bfd1; --ink3: #8d9bb1;
+    --line: #273650; --blue: #3987e5; --blue-ink: #86b9f4; --orange: #d95926; --orange-ink: #f19572;
+    --good: #5fd39a; --good-bg: #123325; --bad: #ff9a92; --bad-bg: #3a1a19; --code-bg: #0a1424; --code-ink: #dbe6f5; --code-dim: #7f93b3;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0b121d; --surface: #121b2a; --surface2: #1a2639; --ink: #e9eef6; --ink2: #b3bfd1; --ink3: #8d9bb1;
+  --line: #273650; --blue: #3987e5; --blue-ink: #86b9f4; --orange: #d95926; --orange-ink: #f19572;
+  --good: #5fd39a; --good-bg: #123325; --bad: #ff9a92; --bad-bg: #3a1a19; --code-bg: #0a1424; --code-ink: #dbe6f5; --code-dim: #7f93b3;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 12px; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 var(--font-sans); -webkit-text-size-adjust: 100%; }
+[hidden] { display: none !important; }
+a { color: var(--blue-ink); text-underline-offset: 2px; }
+a:hover { text-decoration-thickness: 2px; }
+:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 3px; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px)); }
+section { padding-block: 56px; border-top: 1px solid var(--line); }
+h1, h2, h3 { margin: 0; line-height: 1.15; text-wrap: balance; font-weight: 600; letter-spacing: -0.015em; }
+h1 { font-size: clamp(2rem, 4.6vw, 3.1rem); max-width: 30ch; }
+h2 { font-size: clamp(1.45rem, 2.6vw, 1.9rem); }
+h3 { font-size: 1.05rem; letter-spacing: -0.005em; }
+p { margin: 0; }
+.eyebrow { font: 500 12px/1.2 var(--font-mono); letter-spacing: .09em; text-transform: uppercase; color: var(--ink3); }
+.lede { font-size: 1.15rem; color: var(--ink2); max-width: 62ch; }
+.prose { max-width: 66ch; color: var(--ink2); }
+.sec-head { display: grid; gap: 10px; margin-bottom: 28px; }
+.mono { font-family: var(--font-mono); }
+.num { font-variant-numeric: tabular-nums; }
+
+/* top bar */
+.top { display: flex; flex-wrap: wrap; gap: 8px 22px; align-items: center; justify-content: space-between; padding-block: 16px; }
+.brand { font: 500 15px var(--font-mono); letter-spacing: -.01em; }
+.brand b { color: var(--blue-ink); font-weight: 500; }
+.top nav { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 14px; }
+.top nav a { color: var(--ink2); text-decoration: none; padding-block: 4px; }
+.top nav a:hover { color: var(--ink); text-decoration: underline; }
+
+/* hero */
+.hero { padding-block: 24px 40px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+.disclaimer { display: inline-block; font-size: 13px; color: var(--ink2); border: 1px solid var(--line); background: var(--surface); padding: 6px 10px; border-radius: 6px; max-width: 70ch; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 28px 40px; }
+.two h3 { margin-bottom: 8px; }
+.two p { color: var(--ink2); }
+.hero-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.btn { font: 500 14px var(--font-sans); padding: 9px 14px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; min-height: 38px; display: inline-flex; align-items: center; gap: 8px; text-decoration: none; }
+.btn:hover { border-color: var(--ink3); }
+.btn.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+/* lab */
+.lab { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: clamp(12px, 2.4vw, 22px); display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.pipeline { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; align-items: stretch; }
+.node { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--surface); transition: background .35s, border-color .35s; min-width: 0; position: relative; }
+.node + .node { margin-left: 22px; }
+.node + .node::before { content: "→"; position: absolute; left: -19px; top: 50%; transform: translateY(-50%); color: var(--ink3); font: 16px var(--font-mono); }
+.node.on { background: color-mix(in srgb, var(--blue) 14%, var(--surface)); border-color: var(--blue); }
+.node.on.sensor { background: color-mix(in srgb, var(--orange) 16%, var(--surface)); border-color: var(--orange); }
+.node .k { font: 500 11px/1.2 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--ink3); }
+.node .t { font-weight: 600; font-size: 14px; margin-top: 2px; }
+.node .v { font: 13px/1.35 var(--font-mono); color: var(--ink2); margin-top: 4px; min-height: 2.7em; overflow-wrap: anywhere; }
+.firewall { font-size: 13px; color: var(--ink2); display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.firewall b { color: var(--ink); font-weight: 600; }
+.tag { font: 500 11px/1 var(--font-mono); padding: 4px 6px; border-radius: 4px; background: var(--surface2); color: var(--ink2); letter-spacing: .03em; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--ink2); }
+.legend span { display: inline-flex; align-items: center; gap: 7px; }
+.sw { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+.sw.truth { background: var(--ink); border-radius: 2px; transform: rotate(45deg) scale(.85); }
+.sw.read { background: var(--orange); }
+.sw.est { background: var(--blue); }
+.sw.band { background: color-mix(in srgb, var(--blue) 25%, transparent); border: 1px solid var(--blue); border-radius: 2px; width: 16px; height: 10px; }
+.stagewrap { position: relative; }
+#stage { width: 100%; display: block; touch-action: pan-y; cursor: crosshair; }
+.tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--bg); font: 12px/1.45 var(--font-mono); padding: 7px 9px; border-radius: 6px; max-width: 250px; z-index: 3; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+
+.transport { display: grid; grid-template-columns: auto 1fr auto; gap: 10px 14px; align-items: center; }
+.transport .btns { display: flex; gap: 8px; }
+.transport input[type=range] { width: 100%; min-width: 0; }
+.clock { font: 13px var(--font-mono); color: var(--ink2); white-space: nowrap; }
+.speed { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.speed label { cursor: pointer; }
+.speed input { position: absolute; opacity: 0; pointer-events: none; }
+.speed span { display: block; padding: 7px 11px; font: 500 13px var(--font-mono); color: var(--ink2); min-height: 36px; line-height: 22px; }
+.speed input:checked + span { background: var(--ink); color: var(--bg); }
+.speed input:focus-visible + span { outline: 2px solid var(--blue); outline-offset: -2px; }
+.speed label + label span { border-left: 1px solid var(--line); }
+@media (max-width: 640px) { .transport { grid-template-columns: 1fr; } }
+input[type=range] { accent-color: var(--blue); height: 28px; }
+
+.presets { display: flex; flex-wrap: wrap; gap: 8px; }
+.preset-note { background: var(--surface2); border-radius: 8px; padding: 12px 14px; font-size: 14.5px; color: var(--ink2); min-height: 4.2em; }
+.preset-note b { color: var(--ink); }
+
+.tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.tile { border: 1px solid var(--line); border-radius: 8px; padding: 12px; display: grid; gap: 4px; align-content: start; min-width: 0; background: var(--surface); }
+.tile .lab-t { font-size: 13px; color: var(--ink2); display: flex; gap: 7px; align-items: center; }
+.tile .big { font: 600 1.7rem/1.1 var(--font-sans); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.tile .big small { font-size: .9rem; font-weight: 500; color: var(--ink2); margin-left: 3px; letter-spacing: 0; }
+.tile .sub { font-size: 12.5px; color: var(--ink3); }
+.chip { display: inline-flex; gap: 5px; align-items: center; font: 500 12px/1 var(--font-sans); padding: 5px 8px; border-radius: 99px; width: fit-content; }
+.chip.ok { background: var(--good-bg); color: var(--good); }
+.chip.no { background: var(--bad-bg); color: var(--bad); }
+.chip.na { background: var(--surface2); color: var(--ink3); }
+@media (max-width: 960px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .tiles .tile:last-child { grid-column: 1 / -1; } }
+@media (max-width: 640px) { .pipeline { grid-template-columns: 1fr 1fr; gap: 10px; } .node + .node { margin-left: 0; } .node + .node::before { display: none; } }
+
+.knobs { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 14px 26px; border-top: 1px solid var(--line); padding-top: 16px; }
+.knob { display: grid; gap: 2px; min-width: 0; }
+.knob .row { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
+.knob .row output { font: 500 13px var(--font-mono); color: var(--blue-ink); white-space: nowrap; }
+.knob .hint { font-size: 12.5px; color: var(--ink3); }
+.knob input[type=number] { font: 14px var(--font-mono); width: 100%; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); min-height: 34px; }
+.source { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; color: var(--ink2); }
+details.table { font-size: 13px; }
+details.table summary { cursor: pointer; color: var(--ink2); padding-block: 4px; }
+.scroll-x { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font: 500 11.5px var(--font-mono); letter-spacing: .05em; text-transform: uppercase; color: var(--ink3); }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* one update */
+.bellbox { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: clamp(12px, 2.4vw, 22px); display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+#bell { width: 100%; display: block; }
+.steps { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.steps .btn b { font: 500 12px var(--font-mono); opacity: .7; }
+.readout { font-size: 15px; color: var(--ink2); min-height: 3.2em; }
+.readout b { color: var(--ink); }
+.auto { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; color: var(--ink2); margin-left: auto; }
+
+/* modules */
+.mods { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.mods [role=tablist] { display: flex; flex-direction: column; background: var(--surface2); border-right: 1px solid var(--line); }
+.mods [role=tab] { text-align: left; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 13px 16px; cursor: pointer; font: 14px var(--font-sans); color: var(--ink2); display: grid; gap: 2px; }
+.mods [role=tab] .f { font: 11.5px var(--font-mono); color: var(--ink3); }
+.mods [role=tab][aria-selected=true] { background: var(--surface); color: var(--ink); box-shadow: inset 3px 0 0 var(--blue); font-weight: 600; }
+.mods [role=tabpanel] { padding: clamp(14px, 2.4vw, 24px); display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-width: 0; align-content: start; }
+.mods h3 + p { color: var(--ink2); }
+.ids { display: flex; flex-wrap: wrap; gap: 6px; }
+.idchip { font: 500 12px var(--font-mono); padding: 5px 8px; border-radius: 5px; border: 1px solid var(--line); background: var(--surface); color: var(--blue-ink); cursor: pointer; }
+.idchip:hover { border-color: var(--blue); }
+pre.code { margin: 0; background: var(--code-bg); color: var(--code-ink); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font: 12.5px/1.6 var(--font-mono); tab-size: 4; }
+pre.code .cm { color: var(--code-dim); }
+.src-link { font: 12.5px var(--font-mono); }
+@media (max-width: 760px) { .mods { grid-template-columns: 1fr; } .mods [role=tablist] { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); } .mods [role=tab] { white-space: nowrap; border-bottom: 0; border-right: 1px solid var(--line); } .mods [role=tab][aria-selected=true] { box-shadow: inset 0 -3px 0 var(--blue); } }
+
+/* proof */
+.checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 14px; margin-bottom: 30px; }
+.check { border: 1px solid var(--line); border-radius: 8px; padding: 14px; background: var(--surface); display: grid; gap: 6px; align-content: start; }
+.check .n { font: 500 12px var(--font-mono); color: var(--ink3); letter-spacing: .06em; text-transform: uppercase; }
+.check p { font-size: 14.5px; color: var(--ink2); }
+.charts { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: clamp(12px, 2.4vw, 22px); display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; position: relative; }
+.chart h3 { font-size: .98rem; }
+.chart .cap { font-size: 13.5px; color: var(--ink2); margin-bottom: 6px; }
+.chart svg { display: block; width: 100%; overflow: visible; }
+svg text { font-family: var(--font-mono); fill: var(--ink3); font-size: 11px; }
+svg .ax { stroke: var(--line); }
+
+/* trace */
+.trace { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 22px; align-items: start; }
+@media (max-width: 860px) { .trace { grid-template-columns: 1fr; } .reqbox { position: static; } }
+.grid-wrap { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 12px; }
+.grp { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 8px; align-items: center; }
+.grp .gl { font-size: 12.5px; color: var(--ink2); line-height: 1.25; }
+.grp .cells { display: flex; flex-wrap: wrap; gap: 5px; }
+@media (max-width: 480px) { .grp { grid-template-columns: 1fr; gap: 4px; } }
+.cell { width: 38px; height: 28px; font: 500 11px var(--font-mono); border-radius: 4px; border: 1.5px solid var(--blue); background: var(--blue); color: #fff; cursor: pointer; padding: 0; }
+.cell.opt { border-radius: 14px; }
+.cell.none { background: transparent; color: var(--orange-ink); border: 1.5px dashed var(--orange); }
+.cell.dim { opacity: .22; }
+.cell[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: 2px; }
+.key { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12.5px; color: var(--ink2); align-items: center; }
+.key i { display: inline-block; width: 22px; height: 14px; border-radius: 3px; background: var(--blue); vertical-align: -2px; margin-right: 6px; }
+.key i.opt { border-radius: 8px; }
+.key i.none { background: transparent; border: 1.5px dashed var(--orange); }
+.reqbox { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 12px; position: sticky; top: 12px; }
+.reqbox .rid { font: 500 1.5rem var(--font-mono); letter-spacing: -.02em; }
+.reqbox .txt { color: var(--ink); font-size: 15px; }
+.reqbox ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; max-height: 260px; overflow: auto; }
+.reqbox li { font-size: 13px; line-height: 1.4; border-left: 2px solid var(--blue); padding-left: 10px; }
+.reqbox li a { font: 12px var(--font-mono); overflow-wrap: anywhere; display: block; color: var(--ink3); }
+.reqbox li code { font: 12.5px var(--font-mono); overflow-wrap: anywhere; }
+.search { font: 14px var(--font-sans); padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); width: 100%; min-height: 38px; }
+
+/* limits, run */
+.verdict { display: inline-flex; gap: 5px; align-items: center; font: 500 12px var(--font-sans); padding: 4px 8px; border-radius: 99px; }
+.verdict.pass { background: var(--good-bg); color: var(--good); }
+.verdict.fail { background: var(--bad-bg); color: var(--bad); }
+.limits { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.limits th, .limits td { white-space: normal; vertical-align: top; } .limits td .verdict, .limits td.n { white-space: nowrap; } .limits .try { white-space: nowrap; }
+.runbox { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; max-width: 760px; }
+.copyrow { position: relative; }
+.copyrow .btn { position: absolute; right: 8px; top: 8px; min-height: 30px; padding: 4px 10px; font-size: 12.5px; background: var(--surface); }
+.habits { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 12px 36px; margin: 0; padding: 0; list-style: none; }
+.habits li { display: grid; align-content: start; gap: 2px; font-size: 14.5px; color: var(--ink2); border-top: 1px solid var(--line); padding-top: 10px; }
+.habits b { color: var(--ink); font-weight: 600; }
+footer { border-top: 1px solid var(--line); padding-block: 28px 44px; font-size: 13.5px; color: var(--ink2); display: grid; gap: 8px; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .node { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">sensor<b>-</b>sim</div>
+    <nav aria-label="Sections">
+      <a href="#lab">Watch it work</a><a href="#update">One update</a><a href="#build">How it is built</a>
+      <a href="#proof">Proof</a><a href="#trace">Traceability</a><a href="#limits">Limits</a><a href="#run">Run it</a>
+    </nav>
+  </header>
+
+  <div class="hero">
+    <p class="eyebrow">A walkthrough of the project · C++17 and Python</p>
+    <h1>How far can you trust a sensor that is always a little wrong?</h1>
+    <p class="lede">sensor-sim simulates an object moving along a line, reads its position through a noisy sensor, and recovers the true position, and the speed the sensor never measures, using only those readings. It then checks its own answer against the truth it kept hidden.</p>
+    <div class="two">
+      <div>
+        <h3>What it does</h3>
+        <p>Truth is simulated first, so the exact answer is always known. A seeded sensor adds random error to a reading every half second. A Kalman filter turns the readings into a running estimate with its own error bars. A recorder writes every step to a CSV, and a Python script scores the estimate against the truth.</p>
+      </div>
+      <div>
+        <h3>What it sets out to show</h3>
+        <p>That an estimator can be built the way safety-minded teams build software: every requirement has an ID, every test names the requirement it checks, a script fails the build when one loses its test, and each claim is checked against data the filter was never tuned on. The page below lets you see both halves.</p>
+      </div>
+    </div>
+    <p class="disclaimer"><b>Educational simulation.</b> It is not flight software and has not been qualified for any use. It does not model a real sensor, real vehicle dynamics, or operational sensor fusion (SYS-006).</p>
+    <div class="hero-actions">
+      <a class="btn primary" href="#lab">▶ Watch it work</a>
+      <a class="btn" href="https://github.com/giba12/Aerospace">Source on GitHub</a>
+    </div>
+  </div>
+</div>
+
+<main>
+<section id="lab">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Live demo</p>
+      <h2>Watch the filter find the truth</h2>
+      <p class="prose">The black marker is the real object. Orange dots are what the sensor reports, off by about 5 m. Blue is the filter's guess, using the orange dots alone. Press play, then change anything below the chart: the whole run is recalculated at once. Drag across the lower charts to scrub through time.</p>
+    </div>
+
+    <div class="lab">
+      <div class="pipeline" id="pipe" aria-label="Live view of the four stages of the program">
+        <div class="node" id="n-truth"><div class="k">1 · Truth model</div><div class="t">Where it really is</div><div class="v" id="v-truth"></div></div>
+        <div class="node sensor" id="n-sensor"><div class="k">2 · Sensor</div><div class="t">Noisy reading, now and then</div><div class="v" id="v-sensor"></div></div>
+        <div class="node" id="n-filter"><div class="k">3 · Kalman filter</div><div class="t">Best guess + its doubt</div><div class="v" id="v-filter"></div></div>
+        <div class="node" id="n-rec"><div class="k">4 · Recorder</div><div class="t">One CSV row per step</div><div class="v" id="v-rec"></div></div>
+      </div>
+      <p class="firewall"><span class="tag">SYS-002</span><span><b>The filter never sees the truth.</b> It receives only stage 2's readings. Truth goes to the recorder, which is how the result is graded.</span></p>
+
+      <div class="legend" aria-label="Legend">
+        <span><i class="sw truth"></i>True position (hidden from the filter)</span>
+        <span><i class="sw read"></i>Sensor reading</span>
+        <span><i class="sw est"></i>Filter estimate</span>
+        <span><i class="sw band"></i>Filter's own ±2σ error bars</span>
+      </div>
+
+      <div class="stagewrap">
+        <canvas id="stage" role="img" aria-label="Animated chart. Top: a moving object, its noisy sensor readings and the filter's estimate. Middle: position error of readings and estimate over time. Bottom: true and estimated velocity."></canvas>
+        <div class="tip" id="tip" hidden></div>
+      </div>
+
+      <div class="transport">
+        <div class="btns">
+          <button class="btn primary" id="play" type="button" aria-label="Pause">❚❚ Pause</button>
+          <button class="btn" id="replay" type="button">↺ Replay</button>
+        </div>
+        <input type="range" id="scrub" min="0" max="1000" value="0" aria-label="Time in the run">
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <span class="clock" id="clock"></span>
+          <div class="speed" role="radiogroup" aria-label="Playback speed">
+            <label><input type="radio" name="speed" value="1"><span>1×</span></label>
+            <label><input type="radio" name="speed" value="5" checked><span>5×</span></label>
+            <label><input type="radio" name="speed" value="10"><span>10×</span></label>
+            <label><input type="radio" name="speed" value="25"><span>25×</span></label>
+          </div>
+        </div>
+      </div>
+
+      <div class="tiles" aria-label="Running results up to the current time">
+        <div class="tile"><div class="lab-t"><i class="sw read"></i>Raw sensor error</div><div class="big num" id="m-meas">—</div><div class="sub">RMSE of the readings</div></div>
+        <div class="tile"><div class="lab-t"><i class="sw est"></i>Filter error</div><div class="big num" id="m-est">—</div><div class="sub">RMSE of the estimate</div></div>
+        <div class="tile"><div class="lab-t">Filter ÷ raw</div><div class="big num" id="m-ratio">—</div><div class="sub" id="m-ratio-chip"></div></div>
+        <div class="tile"><div class="lab-t">Truth inside its own bars</div><div class="big num" id="m-cov">—</div><div class="sub" id="m-cov-chip"></div></div>
+        <div class="tile"><div class="lab-t">Velocity error</div><div class="big num" id="m-vel">—</div><div class="sub">The sensor never measures speed</div></div>
+      </div>
+
+      <div>
+        <p class="eyebrow" style="margin-bottom:8px">Try a scenario</p>
+        <div class="presets" id="presets"></div>
+      </div>
+      <p class="preset-note" id="presetNote" aria-live="polite"></p>
+
+      <div class="knobs" id="knobs">
+        <div class="knob"><div class="row"><label for="k-sigma">Sensor noise</label><output id="o-sigma"></output></div><input type="range" id="k-sigma" min="0" max="20" step="0.5"><div class="hint">How wrong each reading is, typically (σ).</div></div>
+        <div class="knob"><div class="row"><label for="k-every">Time between readings</label><output id="o-every"></output></div><input type="range" id="k-every" min="1" max="50" step="1"><div class="hint">The simulation steps every 0.1 s.</div></div>
+        <div class="knob"><div class="row"><label for="k-accel">Acceleration of the object</label><output id="o-accel"></output></div><input type="range" id="k-accel" min="0" max="1" step="0.05"><div class="hint">The filter assumes constant speed.</div></div>
+        <div class="knob"><div class="row"><label for="k-r">Sensor noise the filter believes</label><output id="o-r"></output></div><input type="range" id="k-r" min="0.5" max="20" step="0.5"><div class="hint">Set separately from the true noise, on purpose (CFG-003).</div></div>
+        <div class="knob"><div class="row"><label for="k-q">Allowance for the unexpected</label><output id="o-q"></output></div><input type="range" id="k-q" min="0" max="2" step="0.05"><div class="hint">The filter's process noise, q.</div></div>
+        <div class="knob"><div class="row"><label for="k-seed">Random seed</label><output id="o-seed"></output></div><div style="display:flex;gap:8px"><input type="number" id="k-seed" min="0" max="999999" step="1"><button class="btn" id="reseed" type="button" style="white-space:nowrap;flex:none">New noise</button></div><div class="hint">Same seed, same readings, every time (SEN-004).</div></div>
+      </div>
+
+      <div class="source">
+        <span class="chip na" id="srcChip"></span>
+        <span id="srcText"></span>
+        <button class="btn" id="resetRef" type="button" style="margin-left:auto">Back to the recorded run</button>
+      </div>
+      <details class="table">
+        <summary>Show the numbers behind the chart (latest readings)</summary>
+        <div class="scroll-x"><table><thead><tr><th class="n">Step</th><th class="n">Time s</th><th class="n">Truth m</th><th class="n">Reading m</th><th class="n">Reading error</th><th class="n">Estimate m</th><th class="n">Estimate error</th><th class="n">±2σ m</th></tr></thead><tbody id="rows"></tbody></table></div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<section id="update">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">The idea in one picture</p>
+      <h2>One reading, one update</h2>
+      <p class="prose">The filter keeps two things: a best guess and how unsure it is. Between readings it moves the guess forward and lets the doubt grow. When a reading arrives it blends the reading into the guess. The more doubt the filter has compared with the sensor's noise, the harder it leans on the reading. The result is narrower than either input.</p>
+    </div>
+    <div class="bellbox">
+      <div class="steps" id="bellSteps">
+        <button class="btn" type="button" data-s="0" aria-pressed="false"><b>1</b> Predict</button>
+        <button class="btn" type="button" data-s="1" aria-pressed="false"><b>2</b> A reading arrives</button>
+        <button class="btn" type="button" data-s="2" aria-pressed="true"><b>3</b> Update</button>
+        <label class="auto"><input type="checkbox" id="bellAuto" checked> Play automatically</label>
+      </div>
+      <canvas id="bell" role="img" aria-label="Three bell curves along a position axis: the filter's guess, the sensor reading, and the narrower combined estimate."></canvas>
+      <p class="readout" id="bellOut" aria-live="polite"></p>
+      <div class="knobs" style="border-top:0;padding-top:0">
+        <div class="knob"><div class="row"><label for="b-sp">Filter's doubt about its guess</label><output id="b-sp-o"></output></div><input type="range" id="b-sp" min="2" max="15" step="0.5" value="6"></div>
+        <div class="knob"><div class="row"><label for="b-sr">Sensor noise</label><output id="b-sr-o"></output></div><input type="range" id="b-sr" min="2" max="15" step="0.5" value="5"></div>
+      </div>
+      <p class="hint" style="font-size:13px;color:var(--ink3)">This shows the position half of one step. The real filter keeps position and velocity together, so each reading also corrects its estimate of speed, which is how it finds a quantity the sensor never reports.</p>
+    </div>
+  </div>
+</section>
+
+<section id="build">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Inside the program</p>
+      <h2>Small parts with one job each</h2>
+      <p class="prose">The program is about 1,700 lines of C++ and Python. Each part below is a real file; the code shown is copied from it. Requirement IDs link to the traceability explorer further down.</p>
+    </div>
+    <div class="mods">
+      <div role="tablist" aria-label="Parts of the program" id="modTabs"></div>
+      <div role="tabpanel" id="modPanel" tabindex="0"></div>
+    </div>
+  </div>
+</section>
+
+<section id="proof">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Evidence</p>
+      <h2>How do we know the filter is right?</h2>
+      <p class="prose">"It looked good on one run" proves little, so the filter is checked three independent ways. The third matters most: the 50 seeds below were never used to choose a setting or a threshold.</p>
+    </div>
+    <div class="checks">
+      <div class="check"><span class="n">Check 1 · Reference vector</span><h3>A fixed worked example</h3><p>Unit tests compare the first predict and update with the reference vector in the project baseline (VV-EST-01), which came from an independent prototype (EST-001).</p></div>
+      <div class="check"><span class="n">Check 2 · Independent oracle</span><h3>Same filter, different code</h3><p><span class="mono">kalman_oracle.py</span> rebuilds the estimates from the readings alone, in 60-digit decimal arithmetic, never importing the C++. A test compares the two.</p></div>
+      <div class="check"><span class="n">Check 3 · Held-out seeds</span><h3>50 runs it was never tuned on</h3><p>Seeds 1001 to 1050 were kept apart from tuning. The filter must beat the raw readings on <b>every</b> one, and its error bars must be honest.</p></div>
+      <div class="check"><span class="n">Check 4 · This page</span><h3>The same filter in JavaScript</h3><p id="parity">Checking…</p></div>
+    </div>
+    <div class="charts" id="seedCharts">
+      <div class="chart"><h3>Does the estimate beat the raw readings? (EST-008)</h3><p class="cap" id="cap1"></p><div id="ch1"></div></div>
+      <div class="chart"><h3>Are the error bars honest? (EST-012)</h3><p class="cap" id="cap2"></p><div id="ch2"></div></div>
+      <div class="tip" id="tip2" hidden></div>
+    </div>
+  </div>
+</section>
+
+<section id="trace">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Engineering habits</p>
+      <h2>Every requirement points at a test</h2>
+      <p class="prose" id="traceIntro"></p>
+    </div>
+    <div class="trace">
+      <div class="grid-wrap">
+        <input class="search" id="req-search" type="search" placeholder="Filter by ID or word, for example EST, seed, or units" aria-label="Filter requirements">
+        <div id="reqGrid" style="display:grid;gap:10px"></div>
+        <div class="key"><span><i></i>Must, cited by a test</span><span><i class="opt"></i>Should or Could, cited</span><span><i class="none"></i>No test cites it yet</span></div>
+      </div>
+      <div class="reqbox" id="reqBox" aria-live="polite"></div>
+    </div>
+  </div>
+</section>
+
+<section id="limits">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Stated up front</p>
+      <h2>Where it stops working</h2>
+      <p class="prose">The filter assumes constant speed and a known sensor. When those assumptions are wrong, it gets worse, and the project's validation record says so. These are the measured results on 200 tuning seeds (<a href="https://github.com/giba12/Aerospace/blob/master/docs/VALIDATION.md">VALIDATION.md, section 3</a>). Each button runs the same setting in the demo above.</p>
+    </div>
+    <div class="limits scroll-x">
+      <table>
+        <thead><tr><th>Scenario</th><th class="n">Filter ÷ raw, mean</th><th class="n">Truth in bars</th><th>Ratio ≤ 0.75?</th><th>Bars ≥ 90 %?</th><th>What happens</th><th></th></tr></thead>
+        <tbody id="limRows"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="run">
+  <div class="wrap">
+    <div class="sec-head">
+      <p class="eyebrow">Reproduce it</p>
+      <h2>One command to see the same results</h2>
+      <p class="prose">The script builds the simulator, runs the reference scenario, prints the metrics and the independent cross-check, and writes the CSV, the metrics file and the plot this page was built from.</p>
+    </div>
+    <div class="runbox">
+      <div class="copyrow">
+        <pre class="code" id="cmd">git clone https://github.com/giba12/Aerospace
+cd Aerospace
+./run.sh              # build, run, analyze, cross-check
+./run.sh --test       # also build and run the whole test suite</pre>
+        <button class="btn" type="button" id="copyCmd">Copy</button>
+      </div>
+      <p class="prose" style="font-size:14px">Needs Linux, a C++ compiler, CMake, Ninja and Python 3.12, or just Docker or Podman. The container build runs the whole test suite before it will produce an image.</p>
+    </div>
+    <h3 style="margin:36px 0 14px">What is automated on every push</h3>
+    <ul class="habits">
+      <li><b>Two compilers</b>GCC 13 and Clang 18, with warnings as errors.</li>
+      <li><b>Sanitizers</b>AddressSanitizer and UndefinedBehaviorSanitizer run the whole suite.</li>
+      <li><b>Traceability gate</b>The build fails if a Must requirement loses its passing test.</li>
+      <li><b>Coverage</b>About 94 % of library lines, measured with gcov; reported, never used as a gate.</li>
+      <li><b>Time budget</b>The full suite must finish inside 30 seconds (NFR-006).</li>
+      <li><b>Clean-room container</b>Builds from a fresh copy, tests inside the image, runs the scenario.</li>
+      <li><b>Claims are tested</b>A test fails if the README quotes a number that a fresh run no longer produces.</li>
+      <li><b>Deterministic</b>The same seed and settings give a byte-identical CSV on the same build.</li>
+    </ul>
+  </div>
+</section>
+</main>
+
+<div class="wrap">
+  <footer>
+    <p>Everything on this page is computed from files in the repository: the recorded run in <span class="mono">out/run.csv</span>, the seed table in <span class="mono">docs/VALIDATION.md</span>, and the requirement and test links found by scanning <span class="mono">docs/</span> and <span class="mono">tests/</span>. <span class="mono">tools/build_demo.py</span> regenerates the page.</p>
+    <p>Educational simulation. Not flight software; not qualified for any use. The in-browser model uses the same equations as the C++ program but its own random-number generator, so live figures differ slightly from the recorded run.</p>
+  </footer>
+</div>
+
+<noscript><div class="wrap"><p class="disclaimer">This page is interactive and needs JavaScript. The results it shows are in the project README.</p></div></noscript>
+
+<script>
+/*__ENGINE__*/
+</script>
+<script>
+"use strict";
+const DATA = /*__DATA__*/null;
+const GH = "https://github.com/giba12/Aerospace/blob/master/";
+const $ = (s) => document.querySelector(s);
+const lerp = (a, b, f) => a + (b - a) * f;
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ---------- parameters ---------- */
+const C = DATA.run.config;
+const REF = { steps: C.steps, dt: C.dt_s, x0: C.x0_m, v0: C.v0_mps, accel: C.accel_mps2, every: C.meas_every,
+  sigma: C.sigma_m, seed: C.seed, q: C.est_q_m2ps3, r: C.est_r_m2, p0pos: C.est_p0_pos_m2, p0vel: C.est_p0_vel_m2ps2 };
+const KEYS = ["sigma", "every", "accel", "r", "q", "seed"];
+const S = { p: { ...REF }, recorded: true, sim: null, head: reduceMotion ? REF.steps : 250, playing: !reduceMotion, speed: 5,
+  preset: "reference", hover: -1, yErr: 10, vLo: 0, vHi: 12 };
+
+const PRESETS = [
+  { id: "reference", name: "Reference run", p: {},
+    note: "<b>The real program's output</b> (seed 42). The orange readings scatter by about 5 m. The blue estimate stays close to the black truth and sits inside its own shaded bars about 94 % of the time. In the bottom chart the filter finds the speed, 10 m/s, from position readings alone." },
+  { id: "noisy", name: "Much noisier sensor", p: { sigma: 15, r: 225 },
+    note: "<b>Sensor noise tripled, and the filter is told.</b> Single readings are now off by 15 m, yet the estimate stays usable because the filter leans on its own prediction and uses each reading less. A noisier sensor makes the filter more valuable, not less." },
+  { id: "sparse", name: "A reading every 5 s", p: { every: 50 },
+    note: "<b>Few readings.</b> Between readings the filter coasts on its prediction and its error bars swell, then each reading pulls it back. It still helps, but much less, because there is little to average. The 0.75 limit in the requirements is a statement about the reference scenario only." },
+  { id: "overconfident", name: "Overconfident filter", p: { r: 1 },
+    note: "<b>The filter is told the sensor is five times better than it is.</b> The estimate still looks fine, and the error ratio still passes. But the shaded bars are far too narrow and the truth falls outside them most of the time. That is why the project tests the honesty of the error bars (EST-012) as well as the error." },
+  { id: "accel", name: "Break it: speeding up", p: { accel: 0.5 },
+    note: "<b>The object accelerates; the filter assumes it does not.</b> The estimate lags behind, the bottom chart shows the estimated speed falling away from the true speed, and the filter is no better than the raw readings. This is a documented limit of the model, not a bug." },
+];
+
+/* ---------- simulation state ---------- */
+function isRef() { return KEYS.every((k) => S.p[k] === REF[k]); }
+function rebuild() {
+  S.recorded = isRef();
+  const s = SimEngine.simulate(S.p, S.recorded ? DATA.run.meas : null);
+  if (S.recorded) { // show the C++ program's own numbers rather than the browser's recomputation
+    for (let i = 0; i < s.n; i++) { s.est[i] = DATA.run.est[i]; s.evel[i] = DATA.run.vel[i]; s.evar[i] = DATA.run.var[i]; }
+  }
+  S.sim = s;
+  S.head = Math.min(S.head, s.n - 1);
+  let m = 0, vlo = Infinity, vhi = -Infinity;
+  for (let i = 0; i < s.n; i++) {
+    if (!isNaN(s.meas[i])) m = Math.max(m, Math.abs(s.meas[i] - s.pos[i]));
+    if (!isNaN(s.est[i])) m = Math.max(m, Math.abs(s.est[i] - s.pos[i]));
+    vlo = Math.min(vlo, s.vel[i], isNaN(s.evel[i]) ? Infinity : s.evel[i]);
+    vhi = Math.max(vhi, s.vel[i], isNaN(s.evel[i]) ? -Infinity : s.evel[i]);
+  }
+  const steps = [10, 15, 20, 30, 40, 60, 80, 100, 150, 200, 300, 500, 800, 1200];
+  S.yErr = steps.find((v) => v >= m * 1.08) || 2000;
+  const pad = Math.max(2, (vhi - vlo) * 0.12);
+  S.vLo = vlo - pad; S.vHi = vhi + pad;
+  updateSourceUI(); needsDraw = true; lastReadoutStep = -2;
+}
+
+/* ---------- canvas ---------- */
+const cv = $("#stage"), ctx = cv.getContext("2d");
+let L = null, COL = {}, needsDraw = true, visible = true, lastReadoutStep = -2;
+function readColors() {
+  const cs = getComputedStyle(document.documentElement);
+  for (const n of ["bg", "surface", "surface2", "ink", "ink2", "ink3", "line", "blue", "orange"]) COL[n] = cs.getPropertyValue("--" + n).trim();
+  needsDraw = true; bellDirty = true;
+}
+function layout() {
+  const w = cv.parentElement.clientWidth, narrow = w < 560, dpr = Math.min(2, window.devicePixelRatio || 1);
+  const hA = narrow ? 150 : 170, hB = narrow ? 170 : 196, hC = narrow ? 120 : 140, tH = 26, gap = 20, ax = 24;
+  const left = narrow ? 40 : 50, right = 12;
+  let y = 4;
+  const A = { x: 0, w, y: y + tH, h: hA }; y = A.y + hA + gap;
+  const B = { x: left, w: w - left - right, y: y + tH, h: hB }; y = B.y + hB + gap;
+  const Cc = { x: left, w: B.w, y: y + tH, h: hC }; y = Cc.y + hC + ax;
+  cv.width = Math.round(w * dpr); cv.height = Math.round((y + 4) * dpr); cv.style.height = (y + 4) + "px";
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  L = { w, H: y + 4, A, B, C: Cc, narrow };
+  needsDraw = true;
+}
+const MONO = '11px "IBM Plex Mono", ui-monospace, monospace';
+function txt(t, x, y, o = {}) {
+  ctx.font = o.font || MONO; ctx.textAlign = o.align || "left"; ctx.textBaseline = o.base || "alphabetic";
+  if (o.halo) { ctx.lineWidth = 4; ctx.strokeStyle = o.halo; ctx.lineJoin = "round"; ctx.strokeText(t, x, y); }
+  ctx.fillStyle = o.color || COL.ink3; ctx.fillText(t, x, y);
+}
+function line(x1, y1, x2, y2, c, w = 1, dash) {
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.strokeStyle = c; ctx.lineWidth = w; ctx.setLineDash(dash || []); ctx.stroke(); ctx.setLineDash([]);
+}
+function dot(x, y, r, c, ring) {
+  ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); if (ring) { ctx.lineWidth = 2; ctx.strokeStyle = COL.surface2; ctx.stroke(); } ctx.fillStyle = c; ctx.fill();
+}
+function rrect(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
+function fmtErr(v) { return (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(1); }
+function fmtTick(v) { return (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(+v.toFixed(1)); }
+function niceStep(range, n) { const raw = range / n, p = Math.pow(10, Math.floor(Math.log10(raw))); const f = raw / p; return (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * p; }
+
+function draw() {
+  const s = S.sim, k = Math.min(Math.floor(S.head), s.n - 1), f = k < s.n - 1 ? S.head - k : 0;
+  ctx.clearRect(0, 0, L.w, L.H);
+  drawWorld(s, k, f); drawError(s, k); drawVelocity(s, k);
+  // time axis
+  const { B } = L, T = s.t[s.n - 1] || 1, st = [5, 10, 20, 25, 50].find((v) => T / v <= 8) || 100;
+  for (let t = 0; t <= T + 1e-9; t += st) txt(t + " s", B.x + (t / T) * B.w, L.C.y + L.C.h + 16, { align: t === 0 ? "left" : "center" });
+}
+
+function drawWorld(s, k, f) {
+  const { A } = L, k1 = Math.min(k + 1, s.n - 1);
+  const posNow = lerp(s.pos[k], s.pos[k1], f);
+  const Wm = 120, px = A.w / Wm, camL = posNow - 0.62 * Wm, X = (m) => A.x + (m - camL) * px;
+  const trackY = A.y + A.h * 0.5, upY = A.y + A.h * 0.2, loY = A.y + A.h * 0.8;
+  txt(L.narrow ? "WHERE IT IS, ALONG THE TRACK" : "WHERE IT IS: metres along the track, camera follows the object", 0, A.y - 10, { color: COL.ink2 });
+  ctx.save(); rrect(A.x, A.y, A.w, A.h, 8); ctx.fillStyle = COL.surface2; ctx.fill(); ctx.clip();
+  // track and ticks
+  line(A.x, trackY, A.x + A.w, trackY, COL.ink3, 1.5);
+  for (let m = Math.ceil(camL / 10) * 10; m < camL + Wm; m += 10) {
+    const x = X(m), big = m % 50 === 0;
+    line(x, trackY - (big ? 7 : 4), x, trackY + (big ? 7 : 4), COL.ink3, 1);
+    if (m % 20 === 0) txt(m + " m", x, trackY + 20, { align: "center", font: '10px "IBM Plex Mono", monospace' });
+  }
+  // history of readings, each with its error drawn as a line to the true position
+  for (let i = Math.max(0, k - 260); i <= k; i++) {
+    if (isNaN(s.meas[i])) continue;
+    const age = k - i, a = Math.max(0.12, 1 - age / 170), tx = X(s.pos[i]), ox = X(s.meas[i]);
+    if (tx < -20 && ox < -20) continue;
+    ctx.globalAlpha = a;
+    line(tx, trackY - 6, tx, trackY + 6, COL.ink, 2);
+    line(tx, trackY, ox, upY, COL.orange, 1.2); dot(ox, upY, 4.5, COL.orange);
+    if (!isNaN(s.est[i])) { const ex = X(s.est[i]); line(tx, trackY, ex, loY, COL.blue, 1.2); dot(ex, loY, 4, COL.blue); }
+    if (age < 14) { ctx.globalAlpha = (1 - age / 14) * 0.7; ctx.beginPath(); ctx.arc(ox, upY, 5 + age * 1.5, 0, 6.2832); ctx.strokeStyle = COL.orange; ctx.lineWidth = 2; ctx.stroke(); }
+    ctx.globalAlpha = 1;
+  }
+  // the object, and the filter's current guess with its ±2σ bar
+  const tx = X(posNow);
+  ctx.beginPath(); ctx.moveTo(tx + 10, trackY); ctx.lineTo(tx - 7, trackY - 8); ctx.lineTo(tx - 7, trackY + 8); ctx.closePath();
+  ctx.fillStyle = COL.ink; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = COL.surface2; ctx.stroke();
+  if (!isNaN(s.est[k])) {
+    const e = lerp(s.est[k], isNaN(s.est[k1]) ? s.est[k] : s.est[k1], f), sd = Math.sqrt(s.evar[k]);
+    const x1 = X(e - 2 * sd), x2 = X(e + 2 * sd), ex = X(e);
+    ctx.fillStyle = COL.blue; ctx.globalAlpha = 0.2; ctx.fillRect(x1, loY - 9, x2 - x1, 18); ctx.globalAlpha = 1;
+    line(x1, loY, x2, loY, COL.blue, 1.5); line(x1, loY - 6, x1, loY + 6, COL.blue, 1.5); line(x2, loY - 6, x2, loY + 6, COL.blue, 1.5);
+    dot(ex, loY, 6.5, COL.blue, true);
+  }
+  const h = { halo: COL.surface2, color: COL.ink2 };
+  txt(L.narrow ? "SENSOR READINGS" : "SENSOR READINGS (noisy)", 10, upY - 13, h);
+  txt(L.narrow ? "TRUTH" : "TRUTH (kept from the filter)", 10, trackY - 14, h);
+  txt(L.narrow ? "ESTIMATE ± 2σ" : "FILTER ESTIMATE ± 2σ", 10, loY + 25, h);
+  ctx.restore();
+}
+
+function plotFrame(P, title, ticks, Y) {
+  txt(title, 0, P.y - 10, { color: COL.ink2 });
+  for (const v of ticks) { const y = Y(v); line(P.x, y, P.x + P.w, y, v === ticks.zero ? COL.ink3 : COL.line, 1); txt(ticks.fmt(v), P.x - 6, y + 4, { align: "right" }); }
+}
+function drawError(s, k) {
+  const { B } = L, yE = S.yErr, T = s.t[s.n - 1] || 1, X = (t) => B.x + (t / T) * B.w, Y = (e) => B.y + B.h / 2 - (e / yE) * (B.h / 2);
+  const ticks = [-yE, -yE / 2, 0, yE / 2, yE]; ticks.zero = 0; ticks.fmt = fmtTick;
+  plotFrame(B, L.narrow ? "POSITION ERROR (m)" : "POSITION ERROR (m): how far off each answer is", ticks, Y);
+  ctx.save(); ctx.beginPath(); ctx.rect(B.x, B.y, B.w, B.h); ctx.clip();
+  const xn = X(s.t[k]);
+  ctx.fillStyle = COL.surface2; ctx.globalAlpha = 0.55; ctx.fillRect(xn, B.y, B.x + B.w - xn, B.h); ctx.globalAlpha = 1;
+  // filter's own ±2σ band, centred on zero error
+  let first = -1; for (let i = 0; i <= k; i++) if (!isNaN(s.est[i])) { first = i; break; }
+  if (first >= 0) {
+    ctx.beginPath();
+    for (let i = first; i <= k; i++) { const y = Y(Math.min(2 * Math.sqrt(s.evar[i]), yE * 1.2)); i === first ? ctx.moveTo(X(s.t[i]), y) : ctx.lineTo(X(s.t[i]), y); }
+    for (let i = k; i >= first; i--) ctx.lineTo(X(s.t[i]), Y(-Math.min(2 * Math.sqrt(s.evar[i]), yE * 1.2)));
+    ctx.closePath(); ctx.fillStyle = COL.blue; ctx.globalAlpha = 0.16; ctx.fill(); ctx.globalAlpha = 1;
+    ctx.beginPath();
+    for (let i = first; i <= k; i++) { const y = Y(2 * Math.sqrt(s.evar[i])); i === first ? ctx.moveTo(X(s.t[i]), y) : ctx.lineTo(X(s.t[i]), y); }
+    ctx.strokeStyle = COL.blue; ctx.globalAlpha = 0.45; ctx.lineWidth = 1; ctx.stroke();
+    ctx.beginPath();
+    for (let i = first; i <= k; i++) { const y = Y(-2 * Math.sqrt(s.evar[i])); i === first ? ctx.moveTo(X(s.t[i]), y) : ctx.lineTo(X(s.t[i]), y); }
+    ctx.stroke(); ctx.globalAlpha = 1;
+    ctx.beginPath();
+    for (let i = first; i <= k; i++) { const y = Y(s.est[i] - s.pos[i]); i === first ? ctx.moveTo(X(s.t[i]), y) : ctx.lineTo(X(s.t[i]), y); }
+    ctx.strokeStyle = COL.blue; ctx.lineWidth = 2; ctx.lineJoin = "round"; ctx.stroke();
+  }
+  for (let i = 0; i <= k; i++) if (!isNaN(s.meas[i])) dot(X(s.t[i]), Y(s.meas[i] - s.pos[i]), 4, COL.orange);
+  line(xn, B.y, xn, B.y + B.h, COL.ink2, 1);
+  if (S.hover >= 0 && S.hover <= k) line(X(s.t[S.hover]), B.y, X(s.t[S.hover]), B.y + B.h, COL.ink, 1, [3, 3]);
+  ctx.restore();
+}
+function drawVelocity(s, k) {
+  const { C: P } = L, T = s.t[s.n - 1] || 1, lo = S.vLo, hi = S.vHi, X = (t) => P.x + (t / T) * P.w, Y = (v) => P.y + P.h - ((v - lo) / (hi - lo)) * P.h;
+  const stp = niceStep(hi - lo, 4), ticks = []; for (let v = Math.ceil(lo / stp) * stp; v <= hi; v += stp) ticks.push(+v.toFixed(6));
+  ticks.zero = null; ticks.fmt = (v) => String(+v.toFixed(1));
+  plotFrame(P, L.narrow ? "VELOCITY (m/s), NEVER MEASURED" : "VELOCITY (m/s): the sensor never measures this", ticks, Y);
+  ctx.save(); ctx.beginPath(); ctx.rect(P.x, P.y - 2, P.w, P.h + 4); ctx.clip();
+  const xn = X(s.t[k]);
+  ctx.fillStyle = COL.surface2; ctx.globalAlpha = 0.55; ctx.fillRect(xn, P.y, P.x + P.w - xn, P.h); ctx.globalAlpha = 1;
+  ctx.lineJoin = "round";
+  ctx.beginPath(); for (let i = 0; i <= k; i++) { i ? ctx.lineTo(X(s.t[i]), Y(s.vel[i])) : ctx.moveTo(X(s.t[i]), Y(s.vel[i])); }
+  ctx.strokeStyle = COL.ink; ctx.lineWidth = 2; ctx.stroke();
+  ctx.beginPath(); let started = false;
+  for (let i = 0; i <= k; i++) { if (isNaN(s.evel[i])) continue; const x = X(s.t[i]), y = Y(s.evel[i]); started ? ctx.lineTo(x, y) : ctx.moveTo(x, y); started = true; }
+  ctx.strokeStyle = COL.blue; ctx.lineWidth = 2; ctx.stroke();
+  line(xn, P.y, xn, P.y + P.h, COL.ink2, 1);
+  if (S.hover >= 0 && S.hover <= k) line(X(s.t[S.hover]), P.y, X(s.t[S.hover]), P.y + P.h, COL.ink, 1, [3, 3]);
+  ctx.restore();
+}
+
+/* ---------- readouts ---------- */
+const setText = (id, v) => { const e = $(id); if (e.textContent !== v) e.textContent = v; };
+function setChip(id, ok, label) { const e = $(id); const cls = "chip " + (ok === null ? "na" : ok ? "ok" : "no"); const h = ok === null ? label : (ok ? "✓ " : "✕ ") + label; if (e.className !== cls) e.className = cls; if (e.textContent !== h) e.textContent = h; }
+function updateReadouts() {
+  const s = S.sim, k = Math.min(Math.floor(S.head), s.n - 1);
+  if (k === lastReadoutStep) return; lastReadoutStep = k;
+  setText("#clock", "step " + k + " · t = " + s.t[k].toFixed(1) + " s");
+  const sc = $("#scrub"); if (+sc.value !== k) sc.value = k;
+  // pipeline
+  setText("#v-truth", "x = " + s.pos[k].toFixed(1) + " m, v = " + s.vel[k].toFixed(1) + " m/s");
+  let recent = false; for (let i = Math.max(0, k - 6); i <= k; i++) if (!isNaN(s.meas[i])) recent = true;
+  setText("#v-sensor", !isNaN(s.meas[k]) ? "reading " + s.meas[k].toFixed(1) + " m" : recent ? "reading sent" : "no reading due");
+  setText("#v-filter", s.kind[k] === 0 ? "waiting for the first reading" : (s.kind[k] === 2 ? "predict, then update" : "predict only") + "\nx̂ = " + s.est[k].toFixed(1) + " ± " + (2 * Math.sqrt(s.evar[k])).toFixed(1) + " m");
+  $("#v-filter").style.whiteSpace = "pre-line";
+  setText("#v-rec", "row " + k + " of " + (s.n - 1) + " written");
+  $("#n-sensor").classList.toggle("on", recent); $("#n-filter").classList.toggle("on", s.kind[k] === 2 && recent);
+  $("#n-truth").classList.toggle("on", S.playing); $("#n-rec").classList.toggle("on", S.playing);
+  // metrics
+  const m = SimEngine.metricsUpTo(s, k);
+  if (!m || m.n < 2) { for (const id of ["#m-meas", "#m-est", "#m-ratio", "#m-cov", "#m-vel"]) setText(id, "—"); setChip("#m-ratio-chip", null, "needs two readings"); setChip("#m-cov-chip", null, "needs two readings"); }
+  else {
+    $("#m-meas").innerHTML = m.rmseMeas.toFixed(2) + "<small>m</small>"; $("#m-est").innerHTML = m.rmseEst.toFixed(2) + "<small>m</small>";
+    $("#m-vel").innerHTML = m.rmseVel.toFixed(2) + "<small>m/s</small>";
+    if (isNaN(m.ratio)) { setText("#m-ratio", "n/a"); setChip("#m-ratio-chip", null, "exact sensor"); }
+    else { setText("#m-ratio", m.ratio.toFixed(2)); setChip("#m-ratio-chip", m.ratio <= 0.75, m.ratio <= 0.75 ? "within the 0.75 limit" : "over the 0.75 limit"); }
+    setText("#m-cov", (m.coverage * 100).toFixed(0) + " %"); setChip("#m-cov-chip", m.coverage >= 0.9, m.coverage >= 0.9 ? "meets the 90 % limit" : "below the 90 % limit");
+  }
+  if ($("details.table").open) fillRows(s, k);
+  cv.setAttribute("aria-label", "Animated chart at step " + k + ". " + (m ? "Raw readings are off by " + m.rmseMeas.toFixed(1) + " m; the filter estimate by " + m.rmseEst.toFixed(1) + " m." : ""));
+}
+function fillRows(s, k) {
+  const rows = []; for (let i = k; i >= 0 && rows.length < 8; i--) if (!isNaN(s.meas[i])) rows.push(i);
+  $("#rows").innerHTML = rows.map((i) => `<tr><td class="n">${i}</td><td class="n">${s.t[i].toFixed(1)}</td><td class="n">${s.pos[i].toFixed(2)}</td><td class="n">${s.meas[i].toFixed(2)}</td><td class="n">${fmtErr(s.meas[i] - s.pos[i])}</td><td class="n">${s.est[i].toFixed(2)}</td><td class="n">${fmtErr(s.est[i] - s.pos[i])}</td><td class="n">${(2 * Math.sqrt(s.evar[i])).toFixed(2)}</td></tr>`).join("");
+}
+
+/* ---------- controls ---------- */
+const FMT = { sigma: (p) => p.sigma.toFixed(1) + " m", every: (p) => "every " + (p.every / 10).toFixed(1) + " s", accel: (p) => p.accel.toFixed(2) + " m/s²", r: (p) => Math.sqrt(p.r).toFixed(1) + " m", q: (p) => p.q.toFixed(2), seed: (p) => String(p.seed) };
+function syncControls() {
+  const p = S.p;
+  $("#k-sigma").value = p.sigma; $("#k-every").value = p.every; $("#k-accel").value = p.accel; $("#k-r").value = Math.sqrt(p.r); $("#k-q").value = p.q; $("#k-seed").value = p.seed;
+  for (const k of KEYS) $("#o-" + k).textContent = FMT[k](p);
+}
+function setPreset(id, restart) {
+  const pr = PRESETS.find((x) => x.id === id); S.preset = id;
+  S.p = { ...REF, ...pr.p };
+  if (restart) { S.head = 0; S.playing = true; setPlayUI(); }
+  syncControls(); rebuild();
+  document.querySelectorAll("#presets .btn").forEach((b) => b.setAttribute("aria-pressed", b.dataset.id === id ? "true" : "false"));
+  $("#presetNote").innerHTML = pr.note;
+}
+function customised() {
+  S.preset = "custom"; document.querySelectorAll("#presets .btn").forEach((b) => b.setAttribute("aria-pressed", "false"));
+  $("#presetNote").innerHTML = S.recorded ? PRESETS[0].note : "<b>Your own settings.</b> The browser model reruns the whole experiment with these values. Drag across the lower charts to scrub, or press <i>Back to the recorded run</i> to compare with the real program's output.";
+}
+function bind(id, key, conv) {
+  $(id).addEventListener("input", (e) => { const v = parseFloat(e.target.value); if (isNaN(v)) return; S.p[key] = conv ? conv(v) : v; syncControls(); rebuild(); customised(); });
+}
+bind("#k-sigma", "sigma"); bind("#k-every", "every"); bind("#k-accel", "accel"); bind("#k-r", "r", (v) => v * v); bind("#k-q", "q");
+$("#k-seed").addEventListener("change", (e) => { const v = Math.max(0, Math.floor(+e.target.value) || 0); S.p.seed = v; syncControls(); rebuild(); customised(); });
+$("#reseed").addEventListener("click", () => { S.p.seed = Math.floor(Math.random() * 100000); syncControls(); rebuild(); customised(); });
+$("#resetRef").addEventListener("click", () => setPreset("reference", true));
+function updateSourceUI() {
+  const rec = S.recorded; const c = $("#srcChip");
+  c.className = "chip " + (rec ? "ok" : "na"); c.textContent = rec ? "Recorded C++ run" : "In-browser model";
+  $("#srcText").textContent = rec ? "The estimate is the C++ program's own output (seed 42, " + C.compiler + ")." : "Same equations as the C++ program, run in your browser with its own random numbers.";
+  $("#resetRef").hidden = rec;
+}
+function setPlayUI() { const b = $("#play"); b.innerHTML = S.playing ? "❚❚ Pause" : "▶ Play"; b.setAttribute("aria-label", S.playing ? "Pause" : "Play"); }
+$("#play").addEventListener("click", () => { if (!S.playing && S.head >= S.sim.n - 1) S.head = 0; S.playing = !S.playing; setPlayUI(); lastReadoutStep = -2; });
+$("#replay").addEventListener("click", () => { S.head = 0; S.playing = true; setPlayUI(); needsDraw = true; });
+$("#scrub").addEventListener("input", (e) => { S.head = +e.target.value; needsDraw = true; lastReadoutStep = -2; });
+document.querySelectorAll('input[name="speed"]').forEach((r) => r.addEventListener("change", () => { S.speed = +r.value; }));
+document.querySelector("details.table").addEventListener("toggle", () => { lastReadoutStep = -2; });
+
+// hover tooltip and click-to-scrub on the two lower charts
+const tip = $("#tip");
+function stepAt(x, y) {
+  const { B, C: P } = L; if (x < B.x || x > B.x + B.w) return -1;
+  if (!((y >= B.y && y <= B.y + B.h) || (y >= P.y && y <= P.y + P.h))) return -1;
+  return clamp(Math.round(((x - B.x) / B.w) * (S.sim.n - 1)), 0, S.sim.n - 1);
+}
+cv.addEventListener("pointermove", (e) => {
+  const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top, i = stepAt(x, y), s = S.sim, k = Math.floor(S.head);
+  if (i >= 0 && (e.buttons & 1)) { S.head = i; S.hover = i; needsDraw = true; lastReadoutStep = -2; }
+  if (i < 0 || i > k) { if (S.hover !== -1) { S.hover = -1; needsDraw = true; } tip.hidden = true; return; }
+  S.hover = i; needsDraw = true;
+  let h = "t = " + s.t[i].toFixed(1) + " s<br>truth " + s.pos[i].toFixed(1) + " m, " + s.vel[i].toFixed(1) + " m/s";
+  if (!isNaN(s.meas[i])) h += "<br>reading " + fmtErr(s.meas[i] - s.pos[i]) + " m off";
+  if (!isNaN(s.est[i])) h += "<br>estimate " + fmtErr(s.est[i] - s.pos[i]) + " m off (±" + (2 * Math.sqrt(s.evar[i])).toFixed(1) + " bars)<br>est. speed " + s.evel[i].toFixed(1) + " m/s";
+  tip.innerHTML = h; tip.hidden = false;
+  tip.style.left = clamp(x + 14, 4, L.w - 220) + "px"; tip.style.top = clamp(y - 30, 4, L.H - 90) + "px";
+});
+cv.addEventListener("pointerdown", (e) => { const r = cv.getBoundingClientRect(), i = stepAt(e.clientX - r.left, e.clientY - r.top); if (i >= 0) { S.head = i; needsDraw = true; lastReadoutStep = -2; } });
+cv.addEventListener("pointerleave", () => { S.hover = -1; tip.hidden = true; needsDraw = true; });
+
+/* ---------- one update (Gaussian blend) ---------- */
+const bc = $("#bell"), bctx = bc.getContext("2d");
+const BELL = { sp: 6, sr: 5, stage: 2, auto: !reduceMotion, t0: performance.now() - 1000 };
+let bellDirty = true, bellVisible = true, BL = null;
+function bellLayout() {
+  const w = bc.parentElement.clientWidth, h = w < 560 ? 230 : 270, dpr = Math.min(2, window.devicePixelRatio || 1);
+  bc.width = Math.round(w * dpr); bc.height = Math.round(h * dpr); bc.style.height = h + "px"; bctx.setTransform(dpr, 0, 0, dpr, 0, 0); BL = { w, h }; bellDirty = true;
+}
+function setBellStage(n) { BELL.stage = n; BELL.t0 = performance.now(); document.querySelectorAll("#bellSteps [data-s]").forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.s === n))); bellDirty = true; }
+function drawBell(now) {
+  const { w, h } = BL, c = bctx, u = clamp((now - BELL.t0) / 900, 0, 1), e = u * u * (3 - 2 * u), st = BELL.stage;
+  const mu = 40, z = 58, sp = BELL.sp, sr = BELL.sr, K = (sp * sp) / (sp * sp + sr * sr), mu2 = mu + K * (z - mu), s2 = Math.sqrt((sp * sp * sr * sr) / (sp * sp + sr * sr));
+  const spNow = st === 0 ? lerp(sp * 0.55, sp, e) : sp;
+  const aRead = st === 0 ? 0 : st === 1 ? e : 1, aPost = st === 2 ? e : 0, aPrior = st === 2 ? lerp(1, 0.6, e) : 1;
+  const x0 = 14, x1 = w - 14, base = h - 30, top = 46, X = (m) => x0 + (m / 100) * (x1 - x0);
+  const ymax = 1.12 / (Math.min(sp * 0.55, s2, sr) * 2.5066), Y = (p) => base - (p / ymax) * (base - top);
+  c.clearRect(0, 0, w, h);
+  c.font = MONO; c.textBaseline = "alphabetic";
+  c.fillStyle = COL.ink3; c.textAlign = "left"; c.fillText("POSITION (m)", x0, 12);
+  c.strokeStyle = COL.line; c.lineWidth = 1; c.beginPath(); c.moveTo(x0, base); c.lineTo(x1, base); c.stroke();
+  for (let m = 0; m <= 100; m += 10) { c.fillStyle = COL.ink3; c.textAlign = "center"; c.fillText(String(m), X(m), base + 17); c.beginPath(); c.moveTo(X(m), base); c.lineTo(X(m), base + 4); c.stroke(); }
+  const bell = (m, sd, col, alpha, fill, dash, lw) => {
+    c.beginPath(); for (let i = 0; i <= 200; i++) { const mm = (i / 200) * 100, p = Math.exp(-0.5 * ((mm - m) / sd) ** 2) / (sd * 2.5066); i ? c.lineTo(X(mm), Y(p)) : c.moveTo(X(mm), Y(p)); }
+    c.globalAlpha = alpha; c.strokeStyle = col; c.lineWidth = lw; c.setLineDash(dash || []); c.stroke(); c.setLineDash([]);
+    if (fill) { c.lineTo(X(100), base); c.lineTo(X(0), base); c.closePath(); c.globalAlpha = alpha * 0.18; c.fillStyle = col; c.fill(); }
+    c.globalAlpha = 1;
+  };
+  const mark = (m, label, col, alpha, yy) => { c.globalAlpha = alpha; c.strokeStyle = col; c.setLineDash([3, 3]); c.beginPath(); c.moveTo(X(m), yy + 4); c.lineTo(X(m), base); c.stroke(); c.setLineDash([]); c.fillStyle = COL.ink; c.textAlign = "center"; c.fillText(label, clamp(X(m), 44, w - 44), yy); c.globalAlpha = 1; };
+  if (aRead > 0) { bell(z, sr, COL.orange, aRead, true, null, 2.5); mark(z, "reading", COL.orange, aRead, 16); }
+  bell(mu, spNow, COL.blue, aPrior, true, st === 2 ? [6, 4] : null, st === 2 ? 1.8 : 2.5); mark(mu, st === 0 ? "guess, moved forward" : "guess", COL.blue, aPrior, 16);
+  if (aPost > 0) {
+    bell(mu2, s2, COL.blue, aPost, true, null, 3); mark(mu2, "new estimate", COL.blue, aPost, 34);
+    c.globalAlpha = aPost; c.strokeStyle = COL.ink; c.lineWidth = 1.5; const ay = base - 14; c.beginPath(); c.moveTo(X(mu), ay); c.lineTo(X(mu2) - 4, ay); c.stroke(); c.beginPath(); c.moveTo(X(mu2) - 4, ay); c.lineTo(X(mu2) - 10, ay - 4); c.lineTo(X(mu2) - 10, ay + 4); c.closePath(); c.fillStyle = COL.ink; c.fill(); c.globalAlpha = 1;
+  }
+  const out = [
+    "<b>Predict.</b> Time passes. The guess moves forward by velocity × time, and the filter becomes less sure of it: the blue curve widens to ±" + sp.toFixed(1) + " m.",
+    "<b>A reading arrives.</b> The sensor says " + z + " m, with noise of ±" + sr.toFixed(1) + " m. The guess is " + mu + " m. They disagree by " + (z - mu) + " m.",
+    "<b>Update.</b> The filter's gain is " + K.toFixed(2) + " = doubt² ÷ (doubt² + sensor noise²), so it moves " + Math.round(K * 100) + " % of the way from the guess to the reading, to " + mu2.toFixed(1) + " m. The doubt shrinks from ±" + sp.toFixed(1) + " m to ±" + s2.toFixed(1) + " m, narrower than either input.",
+  ][st];
+  if ($("#bellOut").innerHTML !== out) $("#bellOut").innerHTML = out;
+  $("#b-sp-o").textContent = "±" + sp.toFixed(1) + " m"; $("#b-sr-o").textContent = "±" + sr.toFixed(1) + " m";
+  bellDirty = u < 1;
+}
+document.querySelectorAll("#bellSteps [data-s]").forEach((b) => b.addEventListener("click", () => { BELL.auto = false; $("#bellAuto").checked = false; setBellStage(+b.dataset.s); }));
+$("#bellAuto").checked = BELL.auto;
+$("#bellAuto").addEventListener("change", (e) => { BELL.auto = e.target.checked; BELL.t0 = performance.now(); });
+$("#b-sp").addEventListener("input", (e) => { BELL.sp = +e.target.value; bellDirty = true; });
+$("#b-sr").addEventListener("input", (e) => { BELL.sr = +e.target.value; bellDirty = true; });
+
+/* ---------- main loop ---------- */
+let last = performance.now(), tick = 0;
+function frame(now) {
+  const dtw = Math.min(0.1, (now - last) / 1000); last = now; tick++;
+  if (S.playing && visible) {
+    S.head += dtw * S.speed * 10;
+    if (S.head >= S.sim.n - 1) { S.head = S.sim.n - 1; S.playing = false; setPlayUI(); lastReadoutStep = -2; }
+    needsDraw = true;
+  }
+  if (needsDraw && visible) { draw(); updateReadouts(); needsDraw = false; }
+  if (bellVisible) {
+    if (BELL.auto && now - BELL.t0 > 3200) setBellStage((BELL.stage + 1) % 3);
+    if (bellDirty) drawBell(now);
+  }
+  requestAnimationFrame(frame);
+}
+new IntersectionObserver((en) => { visible = en[0].isIntersecting; if (visible) needsDraw = true; }, { rootMargin: "100px" }).observe(cv);
+new IntersectionObserver((en) => { bellVisible = en[0].isIntersecting; if (bellVisible) { bellDirty = true; BELL.t0 = Math.max(BELL.t0, performance.now() - 1000); } }, { rootMargin: "100px" }).observe(bc);
+let lastW = 0;
+new ResizeObserver(() => { const w = document.body.clientWidth; if (w === lastW) return; lastW = w; layout(); bellLayout(); renderSeedCharts(); }).observe(document.body);
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { readColors(); renderSeedCharts(); });
+new MutationObserver(() => { readColors(); renderSeedCharts(); }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+/* ---------- modules ---------- */
+const CODE = {
+  dyn: `TrueState propagate(const TrueState& prev, const DynamicsConfig& cfg, std::int64_t k) {
+    // Explicit Euler: position advances with the OLD velocity, then velocity is updated.
+    // With accel_mps2 == 0 the velocity never changes, so this is exact (SIM-003).
+    return TrueState{static_cast<double>(k) * cfg.dt_s,
+                     prev.position_m + prev.velocity_mps * cfg.dt_s,
+                     prev.velocity_mps + cfg.accel_mps2 * cfg.dt_s};
+}`,
+  sen: `std::optional<Measurement> NoisySensor::observe(const TrueState& truth, std::int64_t step) {
+    if (step % cfg_.every_n_steps != 0) {
+        return std::nullopt;
+    }
+    const double noise_m = cfg_.sigma_m * unit_normal_(rng_);
+    return Measurement{truth.t_s, truth.position_m + noise_m, cfg_.sensor_id};
+}`,
+  est: `KalmanState kalman_update(const KalmanState& s, double z_m, double r_m2) {
+    const Vec2 H{1.0, 0.0};                     // the sensor reads position only
+    const double innovation = z_m - s.x.v0;     // y: how far off the prediction was
+    const double S = s.P.m00 + r_m2;            // how much the innovation is expected to vary
+    const Vec2 K{s.P.m00 / S, s.P.m10 / S};     // gain: how far to move each of position, velocity
+    const Mat2 IKH = identity() - outer(K, H);
+    return KalmanState{s.x + innovation * K,
+                       IKH * s.P * transpose(IKH) + r_m2 * outer(K, K)};
+}`,
+  run: `for (std::int64_t k = 0; k <= cfg.steps; ++k) {
+    if (k > 0) {
+        truth = propagate(truth, cfg, k);
+    }
+    // The sensor decides whether a reading is due (DD-002). The estimator only ever
+    // receives \`meas\`, never \`truth\` (SYS-002).
+    const std::optional<Measurement> meas = sensor.observe(truth, k);
+
+    if (!estimator.initialized()) {
+        if (meas) {
+            est = estimator.initialize(*meas);  // no predict on the first reading (EST-009)
+        }
+    } else {
+        est = estimator.predict(cfg.dt_s);
+        if (meas) {
+            est = estimator.update(*meas);
+        }
+    }
+    recorder.write_row(k, truth, meas, est);
+}`,
+  rec: `step,t_s,true_pos_m,true_vel_mps,meas_pos_m,est_pos_m,est_vel_mps,est_pos_var_m2,est_vel_var_m2s2
+0,0,0,10,3.5249413321042993,3.5249413321042993,0,25,100
+1,0.10000000000000001,1,10,,3.5249413321042993,0,26.000033333333334,100.01000000000001
+2,0.20000000000000001,2,10,,3.5249413321042993,0,29.000266666666672,100.02000000000001
+
+// run.csv.config.json, written next to the CSV so a run can be reproduced
+{ "steps": 1000, "dt_s": 0.1, "sigma_m": 5, "seed": 42, "meas_every": 5,
+  "est_q_m2ps3": 0.1, "est_r_m2": 25, "compiler": "gcc 13.3.0", ... }`,
+  ana: `# python/kalman_oracle.py: independent re-computation of the filter's output (VAL-04)
+#   * rebuilds the est_* columns from ONLY the meas_pos_m readings and the recorded settings
+#   * never looks at the truth columns and never imports the C++
+#   * computes in 60-digit decimal arithmetic on the exact values of the doubles the C++ was given
+
+// metrics.json from the reference run (python/analyze.py)
+{ "n_rows": 1001, "n_measurements": 201, "rmse_meas_pos_m": 5.4598541120696265,
+  "rmse_est_pos_m": 2.32142058992441, "rmse_est_vel_mps": 1.2027805245829981,
+  "improvement_ratio": 0.42517996676736225, "frac_pos_within_2sigma": 0.9402985074626866 }`,
+};
+const MODS = [
+  { id: "dyn", name: "Truth model", file: "src/dynamics.cpp", lang: "C++",
+    what: "Moves the real object forward one 0.1 s step at a time, along one line, at constant speed or with a fixed acceleration. This is the answer key.",
+    why: "Time is computed as step × dt, never accumulated, so a long run does not drift. With zero acceleration the maths is exact.",
+    ids: ["SIM-001", "SIM-002", "SIM-003", "SIM-004"] },
+  { id: "sen", name: "Noisy sensor", file: "src/sensor.cpp", lang: "C++",
+    what: "Reports the object's position plus random error, but only every few steps. Seeded, so the same seed always gives the same readings.",
+    why: "The sensor has no velocity field at all: speed can never leak through. The truth goes in, a reading, or nothing, comes out.",
+    ids: ["SEN-001", "SEN-003", "SEN-004", "SEN-006"] },
+  { id: "est", name: "Kalman filter", file: "src/kalman.cpp", lang: "C++",
+    what: "Keeps a best guess of position and velocity plus how unsure it is (a 2×2 covariance). Predict moves the guess forward; update blends in a reading.",
+    why: "The two steps are pure functions with no stored state, which is what lets a hand calculation and an independent Python version check the same maths. The covariance update uses the numerically safer Joseph form.",
+    ids: ["EST-001", "EST-002", "EST-009", "EST-011", "EST-012"] },
+  { id: "run", name: "Runner", file: "src/runner.cpp", lang: "C++",
+    what: "The whole simulation loop. It calls the truth model, the sensor, the filter and the recorder in a fixed order.",
+    why: "It is the only place that holds the truth, and it passes the filter a reading, never the truth. A compile-time check and a test enforce that.",
+    ids: ["RUN-001", "SYS-002", "EST-002"] },
+  { id: "rec", name: "Recorder", file: "src/recorder.cpp", lang: "CSV",
+    what: "Writes one CSV row per step with 17-digit numbers, and a small JSON file next to it recording every setting, the seed and the build.",
+    why: "Reproducibility: anyone can rerun from the sidecar and get a byte-identical file. The analysis refuses a CSV whose sidecar is missing or mismatched.",
+    ids: ["OUT-001", "OUT-002", "OUT-003", "SEN-004"] },
+  { id: "ana", name: "Analysis and oracle", file: "python/analyze.py", lang: "Python",
+    what: "Scores the run: error of the raw readings against error of the estimate, velocity error, and how often the truth sits inside the filter's own error bars. A second program re-derives the filter independently.",
+    why: "The scoring and the cross-check are separate programs in a different language, so a mistake in the C++ cannot hide behind a matching mistake in the test.",
+    ids: ["ANA-001", "ANA-002", "ANA-004", "EST-012"] },
+];
+function renderModules() {
+  const tabs = $("#modTabs"); tabs.innerHTML = MODS.map((m, i) => `<button role="tab" id="tab-${m.id}" aria-selected="${i === 0}" aria-controls="modPanel" data-i="${i}" tabindex="${i === 0 ? 0 : -1}">${m.name}<span class="f">${m.file}</span></button>`).join("");
+  const show = (i) => {
+    const m = MODS[i];
+    tabs.querySelectorAll("[role=tab]").forEach((t, j) => { t.setAttribute("aria-selected", j === i); t.tabIndex = j === i ? 0 : -1; });
+    const code = CODE[m.id].replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/^(\s*(?:\/\/|#).*)$/gm, '<span class="cm">$1</span>').replace(/(\/\/ [^\n<]*)$/gm, '<span class="cm">$1</span>');
+    $("#modPanel").setAttribute("aria-labelledby", "tab-" + m.id);
+    $("#modPanel").innerHTML = `<div><h3>${m.name}</h3><p>${m.what}</p></div><p style="color:var(--ink2)"><b style="color:var(--ink)">Why it is built this way.</b> ${m.why}</p>
+      <pre class="code">${code}</pre><div><span class="eyebrow">Requirements it answers to</span><div class="ids" style="margin-top:8px">${m.ids.filter((id) => DATA.reqs[id]).map((id) => `<button class="idchip" type="button" data-id="${id}">${id}</button>`).join("")}</div></div>
+      <a class="src-link" href="${GH}${m.file}">${m.file} on GitHub →</a>`;
+    $("#modPanel").querySelectorAll(".idchip").forEach((b) => b.addEventListener("click", () => { selectReq(b.dataset.id); $("#trace").scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth" }); }));
+  };
+  tabs.addEventListener("click", (e) => { const b = e.target.closest("[role=tab]"); if (b) show(+b.dataset.i); });
+  tabs.addEventListener("keydown", (e) => {
+    const cur = +document.activeElement.dataset.i; if (isNaN(cur)) return; let n = cur;
+    if (e.key === "ArrowDown" || e.key === "ArrowRight") n = (cur + 1) % MODS.length; else if (e.key === "ArrowUp" || e.key === "ArrowLeft") n = (cur + MODS.length - 1) % MODS.length; else return;
+    e.preventDefault(); show(n); tabs.children[n].focus();
+  });
+  show(0);
+}
+
+/* ---------- seed charts ---------- */
+const SEEDS = DATA.seeds; // [seed, raw rmse, est rmse, ratio, coverage]
+let seedHover = -1, seedGeom = null;
+function renderSeedCharts() {
+  const host = $("#ch1"); if (!host) return;
+  const w = host.clientWidth || 600; if (!w) return;
+  const ml = 40, mr = 8, mt = 10, mb = 22, h = 170, pw = w - ml - mr, ph = h - mt - mb, n = SEEDS.length, slot = pw / n;
+  seedGeom = { ml, pw, slot, n };
+  const ratios = SEEDS.map((r) => r[3]), covs = SEEDS.map((r) => r[4]);
+  const meanR = ratios.reduce((a, b) => a + b, 0) / n, worst = ratios.indexOf(Math.max(...ratios)), meanC = covs.reduce((a, b) => a + b, 0) / n, lowC = covs.indexOf(Math.min(...covs));
+  $("#cap1").innerHTML = `Each bar is one seed: the estimate's error divided by the raw readings' error. Mean <b>${meanR.toFixed(2)}</b>, worst <b>${ratios[worst].toFixed(2)}</b> (seed ${SEEDS[worst][0]}). All ${n} stay under the 0.75 limit.`;
+  $("#cap2").innerHTML = `Each dot is the share of true positions that fall inside the filter's own ±2σ bars. A perfect filter scores about 0.95. Pooled <b>${(meanC * 100).toFixed(1)} %</b>; lowest <b>${covs[lowC].toFixed(2)}</b>. The limit is 0.90.`;
+  const XS = (i) => ml + (i + 0.5) * slot, guide = `<line class="guide" x1="0" x2="0" y1="${mt}" y2="${mt + ph}" stroke="var(--ink3)" stroke-dasharray="3 3" visibility="hidden"/>`;
+  const Y1 = (v) => mt + ph - (v / 1) * ph;
+  let s1 = `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Bar chart of the error ratio for each of ${n} held-out seeds, all below the 0.75 limit">`;
+  for (const v of [0, 0.25, 0.5, 0.75, 1]) s1 += `<line class="ax" x1="${ml}" x2="${ml + pw}" y1="${Y1(v)}" y2="${Y1(v)}"/><text x="${ml - 6}" y="${Y1(v) + 4}" text-anchor="end">${v.toFixed(2)}</text>`;
+  const bw = Math.max(3, slot * 0.68);
+  SEEDS.forEach((r, i) => { const y = Y1(r[3]); s1 += `<path d="M${XS(i) - bw / 2},${mt + ph} V${y + 3} a3,3 0 0 1 3,-3 h${bw - 6} a3,3 0 0 1 3,3 V${mt + ph} Z" fill="var(--blue)"/>`; });
+  s1 += `<line x1="${ml}" x2="${ml + pw}" y1="${Y1(0.75)}" y2="${Y1(0.75)}" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="6 4"/><text x="${ml + pw}" y="${Y1(0.75) - 6}" text-anchor="end" style="fill:var(--ink)">limit 0.75 (EST-008)</text>`;
+  const wx = clamp(XS(worst), ml + 50, ml + pw - 50);
+  s1 += `<text x="${wx}" y="${Y1(ratios[worst]) - 7}" text-anchor="middle" style="fill:var(--ink)">worst ${ratios[worst].toFixed(2)}</text>`;
+  s1 += `<text x="${ml}" y="${h - 4}">seed ${SEEDS[0][0]}</text><text x="${ml + pw}" y="${h - 4}" text-anchor="end">seed ${SEEDS[n - 1][0]}</text>${guide}</svg>`;
+  $("#ch1").innerHTML = s1;
+  const lo = 0.85, hi = 1, Y2 = (v) => mt + ph - ((v - lo) / (hi - lo)) * ph;
+  let s2 = `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Dot chart of the share of errors inside the filter's own error bars for each seed, all above the 0.90 limit">`;
+  for (const v of [0.85, 0.9, 0.95, 1]) s2 += `<line class="ax" x1="${ml}" x2="${ml + pw}" y1="${Y2(v)}" y2="${Y2(v)}"/><text x="${ml - 6}" y="${Y2(v) + 4}" text-anchor="end">${v.toFixed(2)}</text>`;
+  s2 += `<line x1="${ml}" x2="${ml + pw}" y1="${Y2(0.9)}" y2="${Y2(0.9)}" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="6 4"/><text x="${ml + pw}" y="${Y2(0.9) + 15}" text-anchor="end" style="fill:var(--ink)">limit 0.90 (EST-012)</text>`;
+  s2 += `<text x="${ml + 2}" y="${Y2(0.95) + 14}">perfect filter ≈ 0.95</text><line x1="${ml}" x2="${ml + pw}" y1="${Y2(0.95)}" y2="${Y2(0.95)}" stroke="var(--ink3)" stroke-dasharray="2 4"/>`;
+  SEEDS.forEach((r, i) => { s2 += `<circle cx="${XS(i)}" cy="${Y2(r[4])}" r="4" fill="var(--blue)" stroke="var(--surface)" stroke-width="1.5"/>`; });
+  s2 += `<text x="${ml}" y="${h - 4}">seed ${SEEDS[0][0]}</text><text x="${ml + pw}" y="${h - 4}" text-anchor="end">seed ${SEEDS[n - 1][0]}</text>${guide}</svg>`;
+  $("#ch2").innerHTML = s2;
+}
+function seedMove(e) {
+  if (!seedGeom) return;
+  const svg = e.currentTarget.querySelector("svg"), r = svg.getBoundingClientRect(), x = e.clientX - r.left, i = clamp(Math.floor((x - seedGeom.ml) / seedGeom.slot), 0, seedGeom.n - 1);
+  const inside = x >= seedGeom.ml && x <= seedGeom.ml + seedGeom.pw, t = $("#tip2");
+  document.querySelectorAll("#seedCharts .guide").forEach((g) => { g.setAttribute("x1", seedGeom.ml + (i + 0.5) * seedGeom.slot); g.setAttribute("x2", seedGeom.ml + (i + 0.5) * seedGeom.slot); g.setAttribute("visibility", inside ? "visible" : "hidden"); });
+  if (!inside) { t.hidden = true; return; }
+  const d = SEEDS[i], host = $("#seedCharts").getBoundingClientRect();
+  t.innerHTML = `seed ${d[0]}<br>raw error ${d[1].toFixed(2)} m<br>estimate error ${d[2].toFixed(2)} m<br>ratio ${d[3].toFixed(3)}<br>inside bars ${(d[4] * 100).toFixed(1)} %`;
+  t.hidden = false; t.style.left = clamp(e.clientX - host.left + 14, 4, host.width - 190) + "px"; t.style.top = clamp(e.clientY - host.top - 70, 4, host.height - 110) + "px";
+}
+function seedLeave() { $("#tip2").hidden = true; document.querySelectorAll("#seedCharts .guide").forEach((g) => g.setAttribute("visibility", "hidden")); }
+["#ch1", "#ch2"].forEach((id) => { $(id).addEventListener("pointermove", seedMove); $(id).addEventListener("pointerleave", seedLeave); });
+
+/* ---------- traceability ---------- */
+const GROUPS = [["SYS", "System"], ["SIM", "Truth model"], ["SEN", "Sensor"], ["EST", "Estimator"], ["CFG", "Settings"], ["RUN", "Runner"], ["OUT", "Output files"], ["ANA", "Analysis"], ["NFR", "Quality rules"], ["TST", "Testing"], ["DOC", "Documents"]];
+const METHOD = { T: "test", I: "inspection", D: "demonstration", A: "analysis" }, PRI = { M: "Must", S: "Should", C: "Could" };
+const REQS = DATA.reqs; let selReq = "EST-008";
+function renderTrace() {
+  const ids = Object.keys(REQS), musts = ids.filter((i) => REQS[i].pri === "M"), covered = musts.filter((i) => REQS[i].tests.length), tests = new Set(ids.flatMap((i) => REQS[i].tests.map((t) => t[0] + "::" + t[1])));
+  $("#traceIntro").innerHTML = `The project registers <b>${ids.length}</b> requirements. <b>${covered.length} of ${musts.length}</b> Must requirements are cited by at least one test, and the build fails if that stops being true. Click any square to see its wording and the tests that cite it. ${ids.length - ids.filter((i) => REQS[i].tests.length).length} lower-priority items have no test yet, marked with a dashed outline.`;
+  const q = ($("#req-search").value || "").trim().toLowerCase();
+  $("#reqGrid").innerHTML = GROUPS.map(([p, label]) => {
+    const g = ids.filter((i) => i.startsWith(p + "-")); if (!g.length) return "";
+    return `<div class="grp"><div class="gl"><b style="color:var(--ink)">${p}</b> ${label}</div><div class="cells">${g.map((i) => {
+      const r = REQS[i], hit = !q || i.toLowerCase().includes(q) || r.text.toLowerCase().includes(q);
+      return `<button type="button" class="cell${r.pri === "M" ? "" : " opt"}${r.tests.length ? "" : " none"}${hit ? "" : " dim"}" data-id="${i}" aria-pressed="${i === selReq}" aria-label="${i}, ${PRI[r.pri]}, ${r.tests.length} tests">${i.slice(4)}</button>`;
+    }).join("")}</div></div>`;
+  }).join("");
+  const r = REQS[selReq], meth = r.method.split(/[ ,]+/).map((m) => METHOD[m]).filter(Boolean).join(" and ") || "see baseline";
+  $("#reqBox").innerHTML = `<div class="rid">${selReq}</div><div style="display:flex;gap:8px;flex-wrap:wrap"><span class="chip ${r.pri === "M" ? "ok" : "na"}">${PRI[r.pri]} requirement</span><span class="chip na">checked by ${meth}</span></div>
+    <p class="txt">${(r.text || "").replace(/&/g, "&amp;").replace(/</g, "&lt;")}</p>
+    ${r.tests.length ? `<div><span class="eyebrow">${r.tests.length} test${r.tests.length > 1 ? "s" : ""} cite it</span><ul style="margin-top:8px">${r.tests.map((t) => `<li><code>${t[1]}</code><a href="${GH}${t[0]}">${t[0]}</a></li>`).join("")}</ul></div>` : `<p class="chip no">No test cites this requirement yet</p>`}`;
+  $("#reqGrid").querySelectorAll(".cell").forEach((b) => b.addEventListener("click", () => selectReq(b.dataset.id)));
+}
+function selectReq(id) { if (REQS[id]) { selReq = id; renderTrace(); } }
+$("#req-search").addEventListener("input", renderTrace);
+
+/* ---------- limits ---------- */
+// From docs/VALIDATION.md section 3 (200 tuning seeds, report only).
+const LIMITS = [
+  ["S-ACCEL-SMALL", "accel", "Object accelerates a little (0.1 m/s²)", 0.46, 0.957, true, true, "Still helps, and its bars stay honest.", "accel1"],
+  ["S-ACCEL-LARGE", "accel", "Object accelerates a lot (0.5 m/s²)", 1.05, 0.423, false, false, "The filter's model is wrong, so it is no better than the raw readings.", "accel"],
+  ["S-HIGH-NOISE", "noisy", "Sensor noise 20 m, filter told", 0.34, 0.959, true, true, "A noisier sensor gives a larger improvement.", "noisy20"],
+  ["S-SPARSE", "sparse", "One reading every 5 s", 0.81, 0.963, false, true, "Honest, but there is little to average, so it helps much less.", "sparse"],
+  ["S-WRONG-R", "overconfident", "Filter told the sensor noise is 1 m, not 5 m", 0.57, 0.346, true, false, "The error looks fine but the bars are far too narrow.", "overconfident"],
+];
+const TRY = { accel1: { accel: 0.1 }, accel: { accel: 0.5 }, noisy20: { sigma: 20, r: 400 }, sparse: { every: 50 }, overconfident: { r: 1 } };
+$("#limRows").innerHTML = LIMITS.map((l) => `<tr><td><b>${l[2]}</b><br><span class="mono" style="font-size:11.5px;color:var(--ink3)">${l[0]}</span></td><td class="n">${l[3].toFixed(2)}</td><td class="n">${(l[4] * 100).toFixed(0)} %</td>
+  <td><span class="verdict ${l[5] ? "pass" : "fail"}">${l[5] ? "✓ yes" : "✕ no"}</span></td><td><span class="verdict ${l[6] ? "pass" : "fail"}">${l[6] ? "✓ yes" : "✕ no"}</span></td><td>${l[7]}</td>
+  <td><button class="btn try" type="button" data-t="${l[8]}">Try it ↑</button></td></tr>`).join("");
+document.querySelectorAll(".try").forEach((b) => b.addEventListener("click", () => {
+  S.p = { ...REF, ...TRY[b.dataset.t] }; S.head = 0; S.playing = true; setPlayUI(); syncControls(); rebuild(); customised();
+  $("#presetNote").innerHTML = "<b>Scenario from the validation record.</b> Compare the tiles and the bars with the table: the demo uses one random seed, the table averages 200, so single runs vary.";
+  $("#lab").scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth" });
+}));
+
+/* ---------- misc ---------- */
+$("#presets").innerHTML = PRESETS.map((p) => `<button class="btn" type="button" data-id="${p.id}" aria-pressed="false">${p.name}</button>`).join("");
+$("#presets").addEventListener("click", (e) => { const b = e.target.closest("[data-id]"); if (b) setPreset(b.dataset.id, true); });
+$("#copyCmd").addEventListener("click", async () => {
+  const el = $("#cmd"), b = $("#copyCmd");
+  try { await navigator.clipboard.writeText(el.textContent); b.textContent = "Copied"; }
+  catch (_) { const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); b.textContent = "Selected, press copy"; }
+  setTimeout(() => { b.textContent = "Copy"; }, 2000);
+});
+// Check 4: this page's own filter, fed the C++ run's readings, against the C++ estimates.
+(function parity() {
+  const s = SimEngine.simulate(REF, DATA.run.meas); let d = 0;
+  for (let i = 0; i < s.n; i++) d = Math.max(d, Math.abs(s.est[i] - DATA.run.est[i]), Math.abs(s.evel[i] - DATA.run.vel[i]));
+  $("#parity").innerHTML = `This page re-implements the filter in JavaScript. Fed the C++ run's 201 readings, its estimates differ from the C++ output by at most <b>${d < 1e-6 ? "less than 0.000001 m" : d.toExponential(1) + " m"}</b> across all ${s.n} steps (the stored values are rounded to six decimals).`;
+})();
+
+readColors(); layout(); bellLayout(); renderModules(); renderTrace(); renderSeedCharts();
+setPreset("reference", false); setPlayUI();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
